@@ -1,6 +1,6 @@
 /**
- * @author Alain Barbier alias "Metroidzeta"
- * Copyright © 2025 Alain Barbier (Metroidzeta) - All rights reserved.
+ * @author Alain Barbier
+ * Copyright © 2026 Alain Barbier (alias Metroidzeta) - All rights reserved.
  *
  * This file is part of the project covered by the
  * "Educational and Personal Use License / Licence d’Utilisation Personnelle et Éducative".
@@ -9,10 +9,7 @@
  *
  * Commercial use, redistribution, or public republishing of modified versions
  * is strictly prohibited without the express written consent of the author.
- *
- * Created by Metroidzeta.
  */
-
 package core;
 
 import java.awt.image.BufferedImage;
@@ -20,7 +17,6 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 import java.nio.file.Path;
 import java.nio.file.Files;
-import java.nio.charset.StandardCharsets;
 import java.awt.FontMetrics;
 import java.util.List;
 import java.util.ArrayList;
@@ -30,22 +26,38 @@ public final class Util {
 
 	private Util() { throw new AssertionError("La classe Util ne doit pas être instanciée."); } // Empêche toute instanciation
 
-	public static boolean intToBool(int i) { return i != 0; }
 	public static final int[] VB = { 112, 57, 15, 232, 214, 177, 147, 108, 80, 32, 18 };
 	public static int keyForIndex(int i) { return (i * 31 + 7) & 0xFF; }
 
-	public static void playAndStopMusique(Musique current, Musique next) {
-		if (current != null) current.stop();
-		if (next != null) next.play();
+	public static String requireNonBlank(String s, String name) {
+		if (s == null) throw new NullPointerException(name + " null");
+		if (s.isBlank()) throw new IllegalArgumentException(name + " vide");
+		return s;
 	}
 
-	public static int[][] creerMatriceINT(int hauteur, int largeur, int valeurDefaut) {
-		int[][] matrice = new int[hauteur][largeur];
-		for (int i = 0; i < hauteur; i++) Arrays.fill(matrice[i], valeurDefaut);
-		return matrice;
+	public static int[][] createIntMatrix(int height, int width, int defaultValue) {
+		int[][] matrix = new int[height][width];
+		for (int i = 0; i < height; i++) Arrays.fill(matrix[i], defaultValue);
+		return matrix;
 	}
 
-	public static BufferedImage chargerImage(String chemin) {
+	public static int[][] copyMatrix(int[][] source) {
+		final int[][] copy = new int[source.length][];
+		for (int i = 0; i < source.length; i++) {
+			copy[i] = Arrays.copyOf(source[i], source[i].length);
+		}
+		return copy;
+	}
+
+	public static boolean[][] copyMatrix(boolean[][] source) {
+		final boolean[][] copy = new boolean[source.length][];
+		for (int i = 0; i < source.length; i++) {
+			copy[i] = Arrays.copyOf(source[i], source[i].length);
+		}
+		return copy;
+	}
+
+	public static BufferedImage loadImage(String chemin) {
 		Path path = Path.of(chemin);
 		if (!Files.exists(path)) { System.err.println("Fichier introuvable : " + chemin); return null; }
 		try {

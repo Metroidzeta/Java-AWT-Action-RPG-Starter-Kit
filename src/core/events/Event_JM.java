@@ -1,6 +1,6 @@
 /**
- * @author Alain Barbier alias "Metroidzeta"
- * Copyright © 2025 Alain Barbier (Metroidzeta) - All rights reserved.
+ * @author Alain Barbier
+ * Copyright © 2026 Alain Barbier (alias Metroidzeta) - All rights reserved.
  *
  * This file is part of the project covered by the
  * "Educational and Personal Use License / Licence d’Utilisation Personnelle et Éducative".
@@ -9,36 +9,41 @@
  *
  * Commercial use, redistribution, or public republishing of modified versions
  * is strictly prohibited without the express written consent of the author.
- *
- * Created by Metroidzeta.
  */
+package core.events;
 
-package events;
+import core.GameContext;
+import core.resources.Music;
 
-import core.Musique;
 import java.util.Objects;
 
-public final class Event_JM extends Event {
+/**
+ * Événement : jouer une musique.
+ * Stocke une référence vers une Musique.
+ */
+public final class Event_JM implements Event {
 
-	private final Musique musique;
+	private final Music music;
 
 	/** Constructeur **/
-	public Event_JM(Musique musique) {
-		this.musique = Objects.requireNonNull(musique, "Musique de l'Event_JM null");
+	public Event_JM(Music music) {
+		this.music = Objects.requireNonNull(music, "Music de l'Event_JM null");
 	}
 
-	/** Getters **/
-	public Musique getMusique() { return musique; }
-
 	/** Autres méthodes **/
+	@Override
+	public void execute(GameContext gc) {
+		Objects.requireNonNull(gc, "GameContext null");
+		gc.getAudioManager().playMusic(music);
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (!(o instanceof Event_JM ev_jm)) return false;
-
-		return Objects.equals(musique, ev_jm.musique);
+		return Objects.equals(music, ev_jm.music);
 	}
 
 	@Override
-	public int hashCode() { return Objects.hash(getClass(), musique); }
+	public int hashCode() { return Objects.hash(getClass(), music); }
 }

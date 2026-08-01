@@ -1,6 +1,6 @@
 /**
- * @author Alain Barbier alias "Metroidzeta"
- * Copyright © 2025 Alain Barbier (Metroidzeta) - All rights reserved.
+ * @author Alain Barbier
+ * Copyright © 2026 Alain Barbier (alias Metroidzeta) - All rights reserved.
  *
  * This file is part of the project covered by the
  * "Educational and Personal Use License / Licence d’Utilisation Personnelle et Éducative".
@@ -9,22 +9,21 @@
  *
  * Commercial use, redistribution, or public republishing of modified versions
  * is strictly prohibited without the express written consent of the author.
- *
- * Created by Metroidzeta.
  */
+package core.events;
 
-package events;
+import core.GameContext;
+import core.Util;
 
 import java.util.Objects;
 
-public final class Event_MSG extends Event {
+public final class Event_MSG implements Event {
 
 	private final String msg;
 
 	/** Constructeur **/
 	public Event_MSG(String msg) {
-		if (msg == null || msg.isBlank()) throw new IllegalArgumentException("Message de l'event_MSG null ou vide");
-		this.msg = msg;
+		this.msg = Util.requireNonBlank(msg, "Le message de l'event_MSG");
 	}
 
 	/** Getters **/
@@ -32,10 +31,15 @@ public final class Event_MSG extends Event {
 
 	/** Autres méthodes **/
 	@Override
+	public void execute(GameContext gc) {
+		Objects.requireNonNull(gc, "GameContext null");
+		gc.getHero().setIsWriting(false);
+	}
+
+	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (!(o instanceof Event_MSG ev_msg)) return false;
-
 		return Objects.equals(msg, ev_msg.msg);
 	}
 

@@ -4,15 +4,15 @@
 
 Licence d’Utilisation Personnelle et Éducative / Educational and Personal Use License
 
-Copyright © 2025 Alain Barbier (Metroidzeta)
-Tous droits réservés / All rights reserved
+Copyright © 2026 Alain Barbier (Metroidzeta)  
+Tous droits réservés / All rights reserved  
 
 ---
 🇫🇷 Version Française
 
 ## 1. Objet de la licence
 
-La présente licence encadre les conditions d’utilisation du code source "Slayers RPG Engine JAVA" et des fichiers associés (ci-après désignés “le Logiciel”) créés par Alain Barbier alias “Metroidzeta”.
+La présente licence encadre les conditions d’utilisation du code source "Java/AWT Action RPG Starter Kit" et des fichiers associés (ci-après désignés “le Logiciel”) créés par Alain Barbier alias “Metroidzeta”.
 L’auteur demeure le seul titulaire des droits de propriété intellectuelle sur le Logiciel.
 
 ## 2. Droits accordés
@@ -21,7 +21,7 @@ L’auteur accorde à toute personne physique ou morale les droits suivants :
 
 Consulter, télécharger et exécuter le Logiciel à des fins personnelles et/ou éducatives.
 
-Créer un fork privé (copie de travail) du dépôt à des fins d’étude, d’expérimentation ou d’apprentissage.
+Créer une copie de travail ou un fork du dépôt, uniquement à des fins d’étude, d’expérimentation ou d’apprentissage, sous réserve des conditions de la présente licence et des conditions d’utilisation de la plateforme d’hébergement.
 
 Modifier le code pour un usage strictement personnel ou éducatif.
 
@@ -60,12 +60,12 @@ Les ressources graphiques, musicales et sonores incluses dans ce projet
 (appartenant à leurs auteurs respectifs) ne sont **pas** couvertes par cette licence.  
 Elles sont utilisées à titre de démonstration, d’exemple ou de test technique.  
 
-Tous les droits relatifs à ces éléments (images, sprites, chipsets, musiques, sons, etc.)
+Tous les droits relatifs à ces éléments (images, sprites, chipsets, musiques, sons, etc.) 
 restent la propriété de leurs auteurs d’origine.  
 
 L’utilisation ou la redistribution de ces ressources sans l’autorisation des ayants droit 
 peut constituer une violation du droit d’auteur.  
-Seul le code source (fichiers `.java`) est la propriété d’Alain Barbier alias “Metroidzeta”.
+Seul le code source (fichiers `.java`) est la propriété d’Alain Barbier alias “Metroidzeta”.  
 
 ## 8. Contact
 
@@ -82,22 +82,22 @@ Vous ne pouvez pas le publier, le redistribuer, ni l’utiliser dans un cadre co
 
 ## 1. Purpose of the License
 
-This license defines the terms of use for the source code "Slayers RPG Engine JAVA" and associated files (hereinafter referred to as “the Software”) created by Alain Barbier a.k.a. “Metroidzeta”.
+This license defines the terms of use for the source code "Java/AWT Action RPG Starter Kit" and associated files (hereinafter referred to as “the Software”) created by Alain Barbier a.k.a. “Metroidzeta”.
 The author remains the sole owner of all intellectual property rights to the Software.
 
 ## 2. Granted Rights
 
-The author hereby grants any individual or organization the following rights:
+The author hereby grants any individual or legal entity the following rights :
 
 To view, download, and run the Software for personal and educational purposes only;
 
-To create a private fork of the repository for study, experimentation, or learning;
+To create a working copy or fork of the repository solely for study, experimentation, or learning purposes, subject to the terms of this license and the terms of use of the hosting platform;
 
 To modify the code for personal or educational use only.
 
 ## 3. Restrictions
 
-Without the prior written consent of the author, it is strictly forbidden to:
+Without the prior written consent of the author, it is strictly forbidden to :
 
 Use the Software or any derivative work in a commercial, public, or professional context;
 
@@ -133,9 +133,9 @@ They are used for demonstration, example, or technical testing purposes only.
 All rights related to these elements (images, sprites, tilesets/chipsets, music, sounds, etc.)
 remain the property of their original authors.
 
-Using or redistributing these assets without authorization from the rights holders
+Using or redistributing these assets without authorization from the rights holders 
 may constitute a copyright infringement.
-Only the source code (`.java` files) is the property of Alain Barbier a.k.a. “Metroidzeta”.
+Only the source code (`.java` files) is the property of Alain Barbier a.k.a. “Metroidzeta”.  
 
 ## 8. Contact
 

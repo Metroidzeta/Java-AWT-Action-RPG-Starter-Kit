@@ -1,6 +1,6 @@
 /**
- * @author Alain Barbier alias "Metroidzeta"
- * Copyright © 2025 Alain Barbier (Metroidzeta) - All rights reserved.
+ * @author Alain Barbier
+ * Copyright © 2026 Alain Barbier (alias Metroidzeta) - All rights reserved.
  *
  * This file is part of the project covered by the
  * "Educational and Personal Use License / Licence d’Utilisation Personnelle et Éducative".
@@ -9,10 +9,7 @@
  *
  * Commercial use, redistribution, or public republishing of modified versions
  * is strictly prohibited without the express written consent of the author.
- *
- * Created by Metroidzeta.
  */
-
 package core;
-//                        0      1       2      3
-public enum Directions { BAS, GAUCHE, DROITE, HAUT }
+//                        0     1      2    3
+public enum Directions { DOWN, LEFT, RIGHT, UP }
