@@ -4,11 +4,11 @@
 ---
 🇫🇷 Version Française
 
-# C++/SDL2 Action RPG Starter Kit v1.1
+# Java/AWT Action RPG Starter Kit v1.2
 Projet de création d'un moteur de jeu 2D Action-RPG inspiré du MMORPG français *Slayers Online*  
 (version offline pour le moment, il n'est pas en ligne).
 
-Le moteur est entièrement conçu et codé en C++/SDL2 from scratch (de 0) par Metroidzeta (Alain Barbier).  
+Le moteur est entièrement conçu et codé en Java/AWT from scratch (de 0) par Metroidzeta (Alain Barbier).  
 
 ## POUR COMPILER LE PROGRAMME
 
@@ -58,12 +58,12 @@ Les ressources graphiques, musicales et sonores appartiennent à leurs auteurs r
 ---
 🇬🇧 English Version
 
-# C++/SDL2 Action RPG Starter Kit v1.0
+# Java/AWT Action RPG Starter Kit v1.2
 
 Project for creating a 2D Action-RPG game engine inspired by the French MMORPG *Slayers Online*  
 (offline version for now, it is not online yet).
 
-The engine is entirely designed and coded in C++/SDL2 from scratch (from 0) by Metroidzeta (Alain Barbier).
+The engine is entirely designed and coded in Java/AWT from scratch (from 0) by Metroidzeta (Alain Barbier).
 
 ## HOW TO COMPILE THE PROGRAM
 
