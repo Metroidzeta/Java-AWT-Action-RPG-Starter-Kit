@@ -32,7 +32,7 @@ Puis exécuter :
 
 ## TÉLÉCHARGER LE JEU
 
-[Télécharger le jeu en entier ici (v1.1)](https://mega.nz/file/Egk1BbjS#-QdySzVlArICSRd649M7qM0A5kideKQ-PyI0s_OYGk8)
+[Télécharger le jeu en entier ici (v1.2)](https://mega.nz/file/1wcXiTxL#IaYeJsWX-j8pG4eQoIWBQIbQQTl-rPnrK_zRapp1B8s)
 
 ## POUR LANCER LE JEU
 
@@ -87,7 +87,7 @@ Then run :
 
 ## DOWNLOAD THE GAME
 
-[Download the full game here (v1.1)](https://mega.nz/file/Egk1BbjS#-QdySzVlArICSRd649M7qM0A5kideKQ-PyI0s_OYGk8)
+[Download the full game here (v1.2)](https://mega.nz/file/1wcXiTxL#IaYeJsWX-j8pG4eQoIWBQIbQQTl-rPnrK_zRapp1B8s)
 
 ## HOW TO LAUNCH THE GAME
 
