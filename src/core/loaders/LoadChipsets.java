@@ -43,7 +43,7 @@ public final class LoadChipsets {
 	);
 
 	/** Getters **/
-	public static Map<String, Chipset> get() {
+	public static Map<String, Chipset> load() {
 		final Map<String, Chipset> chipsets = new HashMap<>(CHIPSETS_LIST.size());
 		CHIPSETS_LIST.forEach(chipset -> chipsets.put(chipset.getName(), chipset));
 		return Map.copyOf(chipsets);

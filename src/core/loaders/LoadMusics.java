@@ -25,24 +25,36 @@ public final class LoadMusics {
 
 	private LoadMusics() { throw new AssertionError("La classe LoadMusics ne doit pas être instanciée."); } // Empêche toute instanciation
 
-	private static final List<Music> MUSICS_LIST = List.of( // Création des musiques : new Music(fileName)
-		new Music("Castle_1.ogg"),                            // 0
-		new Music("Sarosa.ogg"),                              // 1
-		new Music("bahamut_lagoon.ogg"),                      // 2
-		new Music("Castle_3.ogg"),                            // 3
-		new Music("2000_ordeal.ogg"),                         // 4
-		new Music("cc_viper_manor.ogg"),                      // 5
-		new Music("suikoden-ii-two-rivers.ogg"),              // 6
-		new Music("mystery3.ogg"),                            // 7
-		new Music("hunter.ogg"),                              // 8
-		new Music("illusionary_world.ogg"),                   // 9
-		new Music("chapt1medfill.ogg")                        // 10
+	private static final List<String> MUSICS_FILENAMES_LIST = List.of( // Création des musiques : "fileName"
+		"Castle_1.ogg",                                      // 0
+		"Sarosa.ogg",                                                  // 1
+		"bahamut_lagoon.ogg",                                          // 2
+		"Castle_3.ogg",                                                // 3
+		"2000_ordeal.ogg",                                             // 4
+		"cc_viper_manor.ogg",                                          // 5
+		"suikoden-ii-two-rivers.ogg",                                  // 6
+		"mystery3.ogg",                                                // 7
+		"hunter.ogg",                                                  // 8
+		"illusionary_world.ogg",                                       // 9
+		"chapt1medfill.ogg"                                            // 10
 	);
 
 	/** Getters **/
-	public static Map<String, Music> get() {
-		final Map<String, Music> musics = new HashMap<>(MUSICS_LIST.size());
-		MUSICS_LIST.forEach(music -> musics.put(music.getName(), music));
-		return Map.copyOf(musics);
+	public static Map<String, Music> load() {
+		final Map<String, Music> musics = new HashMap<>(MUSICS_FILENAMES_LIST.size());
+		try {
+			for (String fileName : MUSICS_FILENAMES_LIST) {
+				final Music music = new Music(fileName);
+				final Music previous = musics.putIfAbsent(music.getName(), music);
+				if (previous != null) {
+					music.close();
+					throw new IllegalStateException("Musique dupliquée : " + music.getName());
+				}
+			}
+			return Map.copyOf(musics);
+		} catch (RuntimeException e) {
+			musics.values().forEach(Music::close);
+			throw e;
+		}
 	}
 }

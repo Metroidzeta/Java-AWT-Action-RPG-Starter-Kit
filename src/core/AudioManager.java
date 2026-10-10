@@ -18,13 +18,17 @@ import core.resources.SoundEffect;
 import java.util.Map;
 import java.util.Objects;
 
-public final class AudioManager {
+import static core.Config.DEBUG_MODE;
+
+public final class AudioManager implements AutoCloseable {
 
 	private final Map<String, SoundEffect> soundEffects;
+	private final Map<String, Music> musics;
 	private Music currentMusic = null;
 
-	public AudioManager(Map<String, SoundEffect> soundEffects) {
+	public AudioManager(Map<String, SoundEffect> soundEffects, Map<String, Music> musics) {
 		this.soundEffects = Map.copyOf(Objects.requireNonNull(soundEffects, "soundEffects null"));
+		this.musics = Map.copyOf(Objects.requireNonNull(musics, "musics null"));
 	}
 
 	/** Autres méthodes **/
@@ -51,13 +55,36 @@ public final class AudioManager {
 			return;
 		}
 
-		sound.play();
+		final int voiceIndex = sound.play();
+
+		if (voiceIndex == -1 && DEBUG_MODE) {
+			System.err.println("Aucune voix disponible : " + name);
+		}
 	}
 
-	public void freeAudioResources() {
-		stopMusic();
-		soundEffects.values().forEach(SoundEffect::close);
-		SoundEffect.shutdown();
-		Music.shutdown();
+	@Override
+	public void close() {
+		RuntimeException failure = null;
+		// Arrêter la musique active.
+		try { stopMusic(); } catch (RuntimeException e) { failure = e; }
+
+		// Fermer tous les bruitages.
+		for (SoundEffect sound : soundEffects.values()) {
+			try { sound.close(); } catch (RuntimeException e) { failure = collectFailure(failure, e); }
+		}
+
+		// Fermer toutes les musiques.
+		for (Music music : musics.values()) {
+			try { music.close(); } catch (RuntimeException e) { failure = collectFailure(failure, e); }
+		}
+
+		// Signaler les erreurs après les tentatives de nettoyage.
+		if (failure != null) { throw failure; }
+	}
+
+	private static RuntimeException collectFailure(RuntimeException previous, RuntimeException current) {
+		if (previous == null) return current;
+		if (previous != current) previous.addSuppressed(current);
+		return previous;
 	}
 }

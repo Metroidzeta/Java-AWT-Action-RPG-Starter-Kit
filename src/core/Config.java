@@ -46,6 +46,7 @@ public final class Config {
 	public static final String UI_ASSETS_DIRECTORY = "img";
 	public static final String CHIPSETS_DIRECTORY = "img";
 	public static final String SKINS_DIRECTORY = "img";
+	public static final String ENEMIES_DIRECTORY = "img";
 	public static final String SOUND_EFFECTS_DIRECTORY = "sfx";
 	public static final String MUSIC_DIRECTORY = "music";
 	public static final String GAME_MAP_DIRECTORY = "maps";

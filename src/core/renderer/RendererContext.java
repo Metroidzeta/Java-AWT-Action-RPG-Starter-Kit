@@ -48,8 +48,8 @@ public final class RendererContext {
 	}
 
 	/** Getters **/
-	public Font getDefaultFont() { return defaultFont; }
-	public Font getFpsFont() { return fpsFont; }
+	public Font getDefaultFont()      { return defaultFont; }
+	public Font getFpsFont()          { return fpsFont; }
 	public Color getCurrentBoxColor() { return BOX_COLORS[boxColorIndex]; }
 
 	/** Autres méthodes **/

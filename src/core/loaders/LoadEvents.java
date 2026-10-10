@@ -17,7 +17,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.GameMap;
-import core.Game;
 import core.resources.Music;
 import core.events.*;
 import static core.Config.GAME_MAP_DIRECTORY;
@@ -30,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -43,7 +43,7 @@ public final class LoadEvents {
 	private record EventData(String gameMapName, int xCell, int yCell, Event event) {}
 
 	/** Méthodes static **/
-	private static List<EventData> getEvents(Game game) {
+	private static List<EventData> getEvents(Map<String, GameMap> gameMaps, Map<String, Music> musics) {
 		final List<EventData> events = new ArrayList<>();
 		try {
 			final Path gameMapDirectory = Path.of(GAME_MAP_DIRECTORY);
@@ -54,7 +54,7 @@ public final class LoadEvents {
 					if (!Files.isRegularFile(file)) continue;
 					final String fileName = file.getFileName().toString();
 					if (fileName.length() <= "_ME.json".length()) continue;
-					readJsonFile(file, game, events);
+					readJsonFile(file, gameMaps, musics, events);
 				}
 			}
 		} catch (IOException e) { throw new IllegalArgumentException("[ERREUR] Lecture des fichiers d'événements : " + e.getMessage(), e); }
@@ -70,16 +70,17 @@ public final class LoadEvents {
 				: fileName;
 	}
 
-	private static void readJsonFile(Path path, Game game, List<EventData> events) {
+	private static void readJsonFile(Path path, Map<String, GameMap> gameMaps, Map<String, Music> musics, List<EventData> events) {
 		try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) { // try-with-resources
 			final JsonElement rootElement = JsonParser.parseReader(reader);
 			if (!rootElement.isJsonObject()) {
-				System.err.println("[ERREUR] Racine JSON invalide dans " + path.getFileName());
-				return;
+				throw new IllegalArgumentException("Racine JSON invalide dans " + path.getFileName());
 			}
 
 			final JsonObject root = rootElement.getAsJsonObject();
-			if (!JsonUtil.isArrayKey(root, "ensemblesEvents")) return;
+			if (!JsonUtil.isArrayKey(root, "ensemblesEvents")) {
+				throw new IllegalArgumentException("Champ ensemblesEvents absent ou invalide dans " + path.getFileName());
+			}
 
 			final JsonArray eventGroups = root.getAsJsonArray("ensemblesEvents");
 			if (eventGroups.isEmpty()) return;
@@ -87,13 +88,11 @@ public final class LoadEvents {
 			final String gameMapName = extractGameMapName(path);
 			for (final JsonElement blocElem : eventGroups) {
 				if (!blocElem.isJsonObject()) {
-					System.err.println("[ERREUR] Bloc d'événement invalide ignoré dans " + path.getFileName());
-					continue;
+					throw new IllegalArgumentException("Bloc d'événements invalide dans " + path.getFileName());
 				}
 				final JsonObject bloc = blocElem.getAsJsonObject();
 				if (!JsonUtil.isIntKey(bloc, "x") || !JsonUtil.isIntKey(bloc, "y") || !JsonUtil.isArrayKey(bloc, "events")) {
-					System.err.println("[ERREUR] Bloc d'événement incomplet ignoré dans " + path.getFileName());
-					continue;
+					throw new IllegalArgumentException("Bloc d'événements incomplet dans " + path.getFileName());
 				}
 				final int xCell = bloc.get("x").getAsInt();
 				final int yCell = bloc.get("y").getAsInt();
@@ -102,89 +101,81 @@ public final class LoadEvents {
 
 				for (final JsonElement evElem : arr) {
 					if (!evElem.isJsonObject()) {
-						System.err.println("[ERREUR] Événement invalide ignoré (" + path.getFileName() + " [" + xCell + "," + yCell + "])");
-						continue;
+						throw new IllegalArgumentException("Event invalide dans " + path.getFileName() + " [" + xCell + ", " + yCell + "]");
 					}
 					final JsonObject ev = evElem.getAsJsonObject();
 					if (!JsonUtil.isStringKey(ev, "type")) {
-						System.err.println("[ERREUR] Événement sans type ignoré (" + path.getFileName() + " [" + xCell + "," + yCell + "])");
-						continue;
+						throw new IllegalArgumentException("Event sans type dans " + path.getFileName() + " [" + xCell + ", " + yCell + "]");
 					}
 
 					final String type = ev.get("type").getAsString();
 					switch (type) {
 						case "MSG" -> {
 							if (!JsonUtil.isStringKey(ev, "texte")) {
-								System.err.println("[AVERTISSEMENT] MSG sans texte ignoré dans " + path.getFileName());
-								continue;
+								throw new IllegalArgumentException("Event MSG sans texte dans " + path.getFileName());
 							}
 							final String msg = ev.get("texte").getAsString();
 							events.add(new EventData(gameMapName, xCell, yCell, new Event_MSG(msg)));
 						}
 						case "TP" -> {
 							if (!JsonUtil.isIntKey(ev, "xDst") || !JsonUtil.isIntKey(ev, "yDst") || !JsonUtil.isStringKey(ev, "carteDst")) {
-								System.err.println("[AVERTISSEMENT] TP incomplet ignoré dans " + path.getFileName());
-								continue;
+								throw new IllegalArgumentException("Event TP incomplet dans " + path.getFileName());
 							}
 							final int xCellDst = ev.get("xDst").getAsInt();
 							final int yCellDst = ev.get("yDst").getAsInt();
 							final String gameMapDstName = ev.get("carteDst").getAsString();
-							final GameMap gameMapDst = game.getGameMap(gameMapDstName);
+							final GameMap gameMapDst = gameMaps.get(gameMapDstName);
 							if (gameMapDst == null) {
-								System.err.println("[AVERTISSEMENT] Carte de destination introuvable \"" + gameMapDstName + "\" dans " + path.getFileName());
-								continue;
+								throw new IllegalArgumentException("Event TP: carte de destination introuvable \"" + gameMapDstName + "\" dans " + path.getFileName());
 							}
 							events.add(new EventData(gameMapName, xCell, yCell, new Event_TP(xCellDst, yCellDst, gameMapDst)));
 						}
 						case "JouerMusique" -> {
 							if (!JsonUtil.isStringKey(ev, "nom")) {
-								System.err.println("[AVERTISSEMENT] JouerMusique sans nom de musique ignoré dans " + path.getFileName());
-								continue;
+								throw new IllegalArgumentException("Event JM sans nom de musique dans " + path.getFileName());
 							}
 							final String musicName = ev.get("nom").getAsString();
-							final Music music = game.getMusic(musicName);
+							final Music music = musics.get(musicName);
 							if (music == null) {
-								System.err.println("[AVERTISSEMENT] Musique introuvable \"" + musicName + "\" dans " + path.getFileName());
-								continue;
+								throw new IllegalArgumentException("Event JM: musique introuvable \"" + musicName + "\" dans " + path.getFileName());
 							}
 							events.add(new EventData(gameMapName, xCell, yCell, new Event_JM(music)));
 						}
 						case "ArretMusique" -> events.add(new EventData(gameMapName, xCell, yCell, new Event_AM()));
 						case "PV" -> {
 							if (!JsonUtil.isIntKey(ev, "valeur")) {
-								System.err.println("[AVERTISSEMENT] modifyHP sans valeur ignoré dans " + path.getFileName());
-								continue;
+								throw new IllegalArgumentException("Event ModifyHP sans valeur dans " + path.getFileName());
 							}
 							final int value = ev.get("valeur").getAsInt();
 							events.add(new EventData(gameMapName, xCell, yCell, new Event_ModifyHP(value)));
 						}
 						case "PM" -> {
 							if (!JsonUtil.isIntKey(ev, "valeur")) {
-								System.err.println("[AVERTISSEMENT] modifyMP sans valeur ignoré dans " + path.getFileName());
-								continue;
+								throw new IllegalArgumentException("Event ModifyMP sans valeur dans " + path.getFileName());
 							}
 							final int value = ev.get("valeur").getAsInt();
 							events.add(new EventData(gameMapName, xCell, yCell, new Event_ModifyMP(value)));
 						}
 						case "LVLUP" -> events.add(new EventData(gameMapName, xCell, yCell, new Event_LVLUP()));
-						default -> System.err.println("[AVERTISSEMENT] Type inconnu \"" + type + "\" ignoré dans " + path.getFileName());
+						default -> throw new IllegalArgumentException("Type d'événement inconnu : " + type + " dans " + path.getFileName());
 					}
 				}
 			}
 		} catch (Exception e) {
-			System.err.println("[ERREUR] Fichier " + path + " : " + e.getMessage());
+			throw new IllegalStateException("Impossible de charger les événements du fichier : " + path.toAbsolutePath(), e);
 		}
 	}
 
-	private static void addEvent(EventData elem, Game game) {
+	private static void addEvent(EventData elem, Map<String, GameMap> gameMaps) {
 		if (elem.event() == null) throw new IllegalArgumentException("[ERREUR] Event null");
-		final GameMap gameMap = game.getGameMap(elem.gameMapName());
+		final GameMap gameMap = gameMaps.get(elem.gameMapName());
 		if (gameMap == null) throw new IllegalArgumentException("[ERREUR] Carte introuvable : \"" +  elem.gameMapName() + "\" pour y insérer un event");
 		gameMap.addEvent(0, elem.xCell(), elem.yCell(), elem.event());
 	}
 
-	public static void inject(Game game) {
-		Objects.requireNonNull(game, "Game null");
-		getEvents(game).forEach(elem -> addEvent(elem, game));
+	public static void load(Map<String, GameMap> gameMaps, Map<String, Music> musics) {
+		Objects.requireNonNull(gameMaps, "Map: gameMaps null");
+		Objects.requireNonNull(musics, "Map: musics null");
+		getEvents(gameMaps, musics).forEach(elem -> addEvent(elem, gameMaps));
 	}
 }

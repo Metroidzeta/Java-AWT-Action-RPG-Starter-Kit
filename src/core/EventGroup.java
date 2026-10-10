@@ -32,9 +32,10 @@ public final class EventGroup {
 
 	/** Autres méthodes **/
 	public void add(int page, Event ev) {
-		Objects.requireNonNull(ev, "Event ajoute null");
+		Objects.requireNonNull(ev, "Event null");
+		if (page < 0) throw new IllegalArgumentException("Numéro de page invalide : " + page);
 		if (page > eventsPages.size()) {
-			throw new IllegalArgumentException("Impossible d’ajouter un event sur une page inexistante : seule la page suivante est acceptée pour agrandir la liste");
+			throw new IllegalArgumentException("Numéro de page invalide : " + page + ". Seule la page suivante est acceptée pour agrandir la liste");
 		}
 		if (page == eventsPages.size()) eventsPages.add(new ArrayList<>());
 		eventsPages.get(page).add(ev);

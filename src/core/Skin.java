@@ -46,9 +46,9 @@ public final class Skin {
 		final BufferedImage[] result = new BufferedImage[TOTAL_REGIONS];
 		for (int i = 0; i < ROWS; i++) {
 			final int y = i * REGION_HEIGHT;
-			final int lineIndex = i * COLS;
+			final int rowIndex = i * COLS;
 			for (int j = 0; j < COLS; j++) {
-				result[lineIndex + j] = image.getSubimage(j * REGION_WIDTH, y, REGION_WIDTH, REGION_HEIGHT);
+				result[rowIndex + j] = image.getSubimage(j * REGION_WIDTH, y, REGION_WIDTH, REGION_HEIGHT);
 			}
 		}
 		return result;

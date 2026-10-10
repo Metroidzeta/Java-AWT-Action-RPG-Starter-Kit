@@ -90,8 +90,8 @@ public final class HeroRenderer {
 		final int xBox = hero.getXScreen() + CELL_SIZE / 2 - boxWidth / 2;
 		final int yBox = hero.getYScreen() - CELL_SIZE / 4 - boxHeight;
 
-		Rectangle boxRect = new Rectangle(xBox, yBox, boxWidth, boxHeight);
-		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), boxRect);
+		Rectangle box = new Rectangle(xBox, yBox, boxWidth, boxHeight);
+		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), box);
 
 		// IMPORTANT : on dessine à l'intérieur (x + padding, y + padding) et on wrap avec innerMax
 		ctx.drawWrappedText(g, Color.WHITE, defaultFont, msg, innerMax, xBox + OVERHEAD_MESSAGE_PADDING, yBox + OVERHEAD_MESSAGE_PADDING);

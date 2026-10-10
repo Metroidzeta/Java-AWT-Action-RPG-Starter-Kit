@@ -22,6 +22,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Rectangle;
 import java.awt.Graphics;
+import java.util.ArrayList;
 
 /**
  * Gestionnaire central de l'affichage du moteur de jeu.
@@ -51,12 +52,14 @@ public final class Renderer {
 
 	/** Affichage - Interface **/
 	public void drawComputePalette(Graphics g)               { hudRenderer.drawComputePalette(g); }
-	public void drawFPS(Graphics g, double fpsResult)        { hudRenderer.drawFPS(g, fpsResult); }
+	public void setFPSText(double fps)                       { hudRenderer.setFPSText(fps); }
+	public void drawFPS(Graphics g)                          { hudRenderer.drawFPS(g); }
+	public void setAlignmentText(int alignment)              { hudRenderer.setAlignmentText(alignment); }
 	public void drawAlignment(Graphics g)                    { hudRenderer.drawAlignment(g); }
 	public void drawHpFlask(Graphics g, int flaskFrame)      { hudRenderer.drawHpFlask(g, flaskFrame); }
 	public void drawMpFlask(Graphics g, int flaskFrame)      { hudRenderer.drawMpFlask(g, flaskFrame); }
 	public void drawXpBar(Graphics g)                        { hudRenderer.drawXpBar(g); }
-	public void drawTextInputBox(Graphics g, String message) { hudRenderer.drawTextInputBox(g, message); }
+	public void drawTextInput(Graphics g, String message)    { hudRenderer.drawTextInput(g, message); }
 
 	/** Affichages - Interface menu **/
 	public void drawNavigationMenu(Graphics g) { hudRenderer.drawNavigationMenu(g);}
@@ -74,4 +77,8 @@ public final class Renderer {
 	public void updateMapDisplayBounds()              { mapRenderer.calculateDisplayBounds(); }
 	public void drawLayer(Graphics g, int layerIndex) { mapRenderer.drawLayer(g, layerIndex); }
 	public void drawWalls(Graphics g)                 { mapRenderer.drawWalls(g); }
+	public void drawEnemies(Graphics g)               { mapRenderer.drawEnemies(g); }
+	public void drawDamage(Graphics g, int number, Color color, double t, ArrayList<Rectangle> hitEnemyHitboxes) {
+		mapRenderer.drawDamage(g, number, color, t, hitEnemyHitboxes);
+	}
 }

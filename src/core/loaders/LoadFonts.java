@@ -35,7 +35,7 @@ public final class LoadFonts {
 	);
 
 	/** Getters **/
-	public static Map<String, Font> get() {
+	public static Map<String, Font> load() {
 		final Map<String, Font> fonts = new HashMap<>(FONTS_LIST.size());
 		FONTS_LIST.forEach(data -> {
 			Font font = new Font(data.fontName(), data.style(), data.size());

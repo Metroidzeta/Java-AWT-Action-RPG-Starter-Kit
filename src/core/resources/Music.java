@@ -13,242 +13,348 @@
 package core.resources;
 
 import core.Util;
-import static core.Config.MUSIC_DIRECTORY;
 
-import java.io.File;
-import java.io.IOException;
 import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.UnsupportedAudioFileException;
 import javax.sound.sampled.LineUnavailableException;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import javax.sound.sampled.SourceDataLine;
+import javax.sound.sampled.UnsupportedAudioFileException;
+import java.io.File;
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static core.Config.MUSIC_DIRECTORY;
 
 /**
- * Gère la lecture, la pause et l'arrêt d'une musique de fond au format audio ogg.
- * L'implémentation est thread-safe et optimise l'utilisation de la mémoire et du CPU
- * pour les musiques jouées. Une seule musique peut être active à la fois.
+ * Lit une musique en streaming (notamment OGG si un décodeur Java Sound est installé).
+ * Une lecture possède sa propre ligne audio, son thread et son état : un ancien
+ * thread ne peut jamais modifier les ressources d'une lecture plus récente.
+ *
+ * La musique active est sélectionnée par {@link core.AudioManager}.
  */
 public final class Music implements AutoCloseable {
 
-	private static final int BUFFER_SIZE = 16384;
-	private static final int STOP_TIMEOUT_MS = 2000;
-	private static final Object INIT_LOCK = new Object();
-	private static Music activeMusic;
-	private static boolean vorbisInitialized;
+	private static final int BUFFER_SIZE = 16_384;
+	private static final long STOP_TIMEOUT_MS = 2_000L;
 
 	private final String name;
 	private final File file;
 	private final AudioFormat decodedFormat;
 
-	private Thread playbackThread;
-	private final AtomicBoolean isRunning = new AtomicBoolean(false);
-	private volatile boolean loop;
+	/** Protège activeSession et closed. Les workers ne prennent jamais ce verrou. */
+	private final Object lifecycleLock = new Object();
+	private PlaybackSession activeSession;
+	private boolean closed;
 
-	private final Lock pauseLock = new ReentrantLock();
-	private final Condition pauseCondition = pauseLock.newCondition();
-	private final AtomicBoolean paused = new AtomicBoolean(false);
-
-	private SourceDataLine audioLine;
-
-	private static void initVorbisSPI() {
-		if (!vorbisInitialized) {
-			synchronized (INIT_LOCK) {
-				vorbisInitialized = true;
-				Runtime.getRuntime().addShutdownHook(new Thread(Music::shutdown, "Music-Shutdown")); // Fermeture automatique à l’arrêt du programme
-			}
-		}
-	}
-
-	/** Constructeur **/
 	public Music(String fileName) {
 		name = Util.requireNonBlank(fileName, "Nom fichier de la musique");
 		file = new File(MUSIC_DIRECTORY, fileName);
-		if (!file.exists()) throw new IllegalStateException("Fichier introuvable : " + file.getAbsolutePath());
-
-		initVorbisSPI();
+		if (!file.isFile()) {
+			throw new IllegalStateException("Fichier introuvable : " + file.getAbsolutePath());
+		}
 		decodedFormat = initDecodedFormat();
 	}
 
-	/** Getters **/
 	public String getName() { return name; }
 
 	private AudioFormat initDecodedFormat() {
-		try (AudioInputStream ais = AudioSystem.getAudioInputStream(file)) { // try-with-resources
-			AudioFormat baseFormat = ais.getFormat();
-			return new AudioFormat(
+		try (AudioInputStream source = AudioSystem.getAudioInputStream(file)) {
+			final AudioFormat input = source.getFormat();
+			final int channels = input.getChannels();
+			final float sampleRate = input.getSampleRate();
+
+			if (channels <= 0 || !Float.isFinite(sampleRate) || sampleRate <= 0) {
+				throw new IllegalStateException("Format audio invalide : " + input);
+			}
+
+			final AudioFormat pcm = new AudioFormat(
 					AudioFormat.Encoding.PCM_SIGNED,
-					baseFormat.getSampleRate(),
+					sampleRate,
 					16,
-					baseFormat.getChannels(),
-					baseFormat.getChannels() * 2,
-					baseFormat.getSampleRate(),
+					channels,
+					channels * Short.BYTES,
+					sampleRate,
 					false
 			);
-		}
-		catch (UnsupportedAudioFileException e) { throw new RuntimeException("Format audio non supporté : " + name, e); }
-		catch (IOException e) { throw new RuntimeException("Erreur lecture fichier : " + name, e); }
-	}
 
-	private synchronized void openAudioLine() {
-		if (audioLine != null && audioLine.isOpen()) return;
-
-		try {
-			DataLine.Info info = new DataLine.Info(SourceDataLine.class, decodedFormat);
-			audioLine = (SourceDataLine) AudioSystem.getLine(info);
-			audioLine.open(decodedFormat);
-		} catch (LineUnavailableException e) {
-			throw new RuntimeException("Ligne audio indisponible : " + name, e);
-		}
-	}
-
-	private synchronized void closeAudioLine() {
-		if (audioLine != null && audioLine.isOpen()) {
-			audioLine.drain();
-			audioLine.close();
-			audioLine = null;
+			if (!AudioSystem.isConversionSupported(pcm, input)) {
+				throw new IllegalStateException("Conversion audio non supportée : " + input + " -> " + pcm);
+			}
+			return pcm;
+		} catch (UnsupportedAudioFileException | IOException e) {
+			throw new IllegalStateException("Impossible de décoder la musique : " + name, e);
 		}
 	}
 
 	public void play() { play(true); }
 
-	public synchronized void play(boolean loop) {
-		if (isRunning.get()) return;
-		this.loop = loop;
+	public void play(boolean loop) {
+		synchronized (lifecycleLock) {
+			ensureOpen();
+			if (isActive(activeSession)) return;
 
-		stopActiveMusic();
-		activeMusic = this;
+			// Une précédente session terminée n'est jamais réutilisée.
+			final SourceDataLine line = openAudioLine();
+			final PlaybackSession session = new PlaybackSession(line, loop);
+			final Thread thread = new Thread(() -> playbackLoop(session), "Music-" + name);
+			thread.setDaemon(true);
+			session.thread = thread;
+			activeSession = session;
 
-		openAudioLine();
-
-		isRunning.set(true);
-		paused.set(false);
-
-		if (audioLine != null) audioLine.start();
-
-		playbackThread = new Thread(this::playbackLoop, "Music-" + name);
-		playbackThread.setDaemon(true);
-		playbackThread.start();
-	}
-
-	private void stopActiveMusic() {
-		if (activeMusic != null && activeMusic != this) activeMusic.stop();
-	}
-
-	private void playbackLoop() {
-		try {
-			do { if (!playOnce()) break; }
-			while (loop && isRunning.get());
-		} finally {
-			stopAudioLine();
-			isRunning.set(false);
-		}
-	}
-
-	private boolean playOnce() {
-		try (AudioInputStream ais = AudioSystem.getAudioInputStream(file);
-			 AudioInputStream din = AudioSystem.getAudioInputStream(decodedFormat, ais)) { // try-with-ressources
-
-			byte[] buffer = new byte[BUFFER_SIZE];
-			int bytesRead;
-
-			while ((bytesRead = din.read(buffer)) != -1 && isRunning.get()) {
-				if (!waitWhilePaused()) return false;
-				if (!isRunning.get()) return false;
-				if (audioLine != null) audioLine.write(buffer, 0, bytesRead);
+			try {
+				line.start();
+				thread.start();
+			} catch (RuntimeException | Error e) {
+				activeSession = null;
+				session.requestStop();
+				throw e;
 			}
-			if (audioLine != null) audioLine.drain();
-			return true;
-
-		} catch (UnsupportedAudioFileException | IOException e) {
-			System.err.println("Erreur durant lecture de " + name + " : " + e.getMessage());
-			return false;
 		}
 	}
 
-	private boolean waitWhilePaused() {
-		pauseLock.lock();
+	private SourceDataLine openAudioLine() {
+		SourceDataLine line = null;
 		try {
-			while (paused.get() && isRunning.get()) pauseCondition.await();
-			return isRunning.get();
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			return false;
+			line = AudioSystem.getSourceDataLine(decodedFormat);
+			line.open(decodedFormat);
+			return line;
+		} catch (LineUnavailableException | RuntimeException e) {
+			if (line != null) {
+				try { line.close(); }
+				catch (RuntimeException closeFailure) { e.addSuppressed(closeFailure); }
+			}
+			throw new IllegalStateException("Impossible d'ouvrir la sortie audio : " + name, e);
+		}
+	}
+
+	private void playbackLoop(PlaybackSession session) {
+		final int frameSize = decodedFormat.getFrameSize();
+		final int bufferBytes = BUFFER_SIZE - (BUFFER_SIZE % frameSize);
+		final byte[] buffer = new byte[Math.max(frameSize, bufferBytes)];
+
+		try {
+			do {
+				if (!playOnce(session, buffer)) return;
+			} while (session.loop && !session.stopRequested.get());
+
+			// Uniquement à la fin naturelle d'une lecture non bouclée.
+			if (!session.loop && session.awaitUnpaused()) {
+				session.line.drain();
+			}
+		} catch (UnsupportedAudioFileException | IOException | RuntimeException e) {
+			if (!session.stopRequested.get()) {
+				System.err.println("Erreur de lecture de la musique " + name + " : " + e);
+			}
 		} finally {
-			pauseLock.unlock();
+			try {
+				session.closeOutput();
+			} finally {
+				session.finished = true;
+			}
 		}
 	}
 
-	private void stopAudioLine() {
-		if (audioLine != null) {
-			audioLine.stop();
-			audioLine.flush();
+	/** Retourne true si le fichier est arrivé à sa fin naturelle. */
+	private boolean playOnce(PlaybackSession session, byte[] buffer)
+			throws UnsupportedAudioFileException, IOException {
+		try (AudioInputStream source = AudioSystem.getAudioInputStream(file);
+		     AudioInputStream decoded = AudioSystem.getAudioInputStream(decodedFormat, source)) { // try-with-resources
+
+			boolean hasAudioData = false;
+			while (!session.stopRequested.get()) {
+				if (!session.awaitUnpaused()) return false;
+
+				final int bytesRead = decoded.read(buffer, 0, buffer.length);
+				if (bytesRead == -1) {
+					if (!hasAudioData) {
+						throw new IllegalStateException("Musique sans échantillons : " + name);
+					}
+					return true;
+				}
+				if (bytesRead == 0) continue;
+				hasAudioData = true;
+
+				int offset = 0;
+				while (offset < bytesRead) {
+					if (!session.awaitUnpaused()) return false;
+
+					final int written = session.line.write(buffer, offset, bytesRead - offset);
+					if (written <= 0) {
+						if (session.stopRequested.get()) return false;
+						if (session.isPaused()) continue; // la ligne a pu s'arrêter entre deux contrôles
+						throw new IllegalStateException("Écriture audio interrompue : " + name);
+					}
+					offset += written;
+				}
+			}
+			return false;
 		}
 	}
 
-	public synchronized void stop() {
-		if (!isRunning.get()) return;
-
-		isRunning.set(false);
-		paused.set(false);
-
-		pauseLock.lock();
-		try { pauseCondition.signalAll(); }
-		finally { pauseLock.unlock(); }
-
-		stopAudioLine();
-		waitThreadEnd();
-		closeAudioLine();
-	}
-
-	private void waitThreadEnd() {
-		if (playbackThread != null && playbackThread.isAlive()) {
-			playbackThread.interrupt();
-			try { playbackThread.join(STOP_TIMEOUT_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-		}
+	private static boolean isActive(PlaybackSession session) {
+		return session != null && !session.stopRequested.get() && !session.finished;
 	}
 
 	public void pause() {
-		pauseLock.lock();
-		try { paused.set(true); }
-		finally { pauseLock.unlock(); }
+		synchronized (lifecycleLock) {
+			ensureOpen();
+			if (isActive(activeSession)) activeSession.pause();
+		}
 	}
 
 	public void resume() {
-		pauseLock.lock();
-		try {
-			if (paused.get()) {
-				paused.set(false);
-				pauseCondition.signalAll();
-			}
-		} finally {
-			pauseLock.unlock();
+		synchronized (lifecycleLock) {
+			ensureOpen();
+			if (isActive(activeSession)) activeSession.resume();
 		}
 	}
 
-	public boolean isRunning() { return isRunning.get() && !paused.get(); }
-	public boolean isPaused() { return paused.get(); }
-	public boolean isPlaying() { return isRunning.get(); }
+	public void stop() {
+		synchronized (lifecycleLock) {
+			ensureOpen();
+			stopActiveSession();
+		}
+	}
+
+	private void stopActiveSession() {
+		final PlaybackSession session = activeSession;
+		activeSession = null;
+		if (session == null) return;
+
+		session.requestStop();
+		final Thread thread = session.thread;
+		if (thread == null || thread == Thread.currentThread()) return;
+
+		try {
+			thread.join(STOP_TIMEOUT_MS);
+			if (thread.isAlive()) {
+				System.err.println("Le thread audio ne s'est pas terminé dans le délai : " + name);
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	public boolean isRunning() {
+		synchronized (lifecycleLock) {
+			return isActive(activeSession);
+		}
+	}
+
+	public boolean isPlaying() {
+		synchronized (lifecycleLock) {
+			final PlaybackSession session = activeSession;
+			return isActive(session) && !session.isPaused();
+		}
+	}
+
+	public boolean isPaused() {
+		synchronized (lifecycleLock) {
+			final PlaybackSession session = activeSession;
+			return isActive(session) && session.isPaused();
+		}
+	}
+
+	private void ensureOpen() {
+		if (closed) throw new IllegalStateException("Musique déjà fermée : " + name);
+	}
 
 	@Override
-	public synchronized void close() {
-		stop();
-		if (activeMusic == this) activeMusic = null;
-		closeAudioLine();
+	public void close() {
+		synchronized (lifecycleLock) {
+			if (closed) return;
+			closed = true;
+			stopActiveSession();
+		}
 	}
 
-	public static synchronized void shutdown() {
-		if (activeMusic != null) {
-			activeMusic.close();
-			activeMusic = null;
+	/** Etat privé d'UNE lecture. Ne référence jamais la session suivante. */
+	private static final class PlaybackSession {
+		final SourceDataLine line;
+		final boolean loop;
+		final AtomicBoolean stopRequested = new AtomicBoolean(false);
+		final ReentrantLock pauseLock = new ReentrantLock();
+		final Condition unpaused = pauseLock.newCondition();
+		final AtomicBoolean outputClosed = new AtomicBoolean(false);
+
+		volatile boolean finished;
+		Thread thread; // défini avant Thread.start, sous lifecycleLock
+		private boolean paused; // protégé par pauseLock
+
+		PlaybackSession(SourceDataLine line, boolean loop) {
+			this.line = line;
+			this.loop = loop;
 		}
-		synchronized (INIT_LOCK) {
-			vorbisInitialized = false;
+
+		void pause() {
+			pauseLock.lock();
+			try {
+				if (stopRequested.get() || finished || paused) return;
+				paused = true;
+				line.stop();
+			} finally {
+				pauseLock.unlock();
+			}
+		}
+
+		void resume() {
+			pauseLock.lock();
+			try {
+				if (stopRequested.get() || finished || !paused) return;
+				line.start();
+				paused = false;
+				unpaused.signalAll();
+			} finally {
+				pauseLock.unlock();
+			}
+		}
+
+		boolean isPaused() {
+			pauseLock.lock();
+			try { return paused; }
+			finally { pauseLock.unlock(); }
+		}
+
+		boolean awaitUnpaused() {
+			pauseLock.lock();
+			try {
+				while (paused && !stopRequested.get()) {
+					try { unpaused.await(); }
+					catch (InterruptedException e) {
+						if (!stopRequested.get()) Thread.currentThread().interrupt();
+						return false;
+					}
+				}
+				return !stopRequested.get();
+			} finally {
+				pauseLock.unlock();
+			}
+		}
+
+		void requestStop() {
+			stopRequested.set(true);
+			pauseLock.lock();
+			try {
+				paused = false;
+				unpaused.signalAll();
+			} finally {
+				pauseLock.unlock();
+			}
+			if (thread != null) thread.interrupt();
+			closeOutput(); // débloque normalement SourceDataLine.write() et drain()
+		}
+
+		void closeOutput() {
+			if (!outputClosed.compareAndSet(false, true)) return;
+			try { line.stop(); }
+			catch (RuntimeException e) { System.err.println("Erreur arrêt audio : " + e); }
+			try { line.flush(); }
+			catch (RuntimeException e) { System.err.println("Erreur vidage audio : " + e); }
+			try { line.close(); }
+			catch (RuntimeException e) { System.err.println("Erreur fermeture audio : " + e); }
 		}
 	}
 }

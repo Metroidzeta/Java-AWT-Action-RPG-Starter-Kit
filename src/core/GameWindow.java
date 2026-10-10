@@ -18,6 +18,8 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.GraphicsEnvironment;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.image.BufferStrategy;
 import java.io.Serial;
 import java.lang.reflect.InvocationTargetException;
@@ -36,14 +38,22 @@ public final class GameWindow extends JFrame {
 	private final int windowedHeight;
 	private boolean fullscreen;
 	private volatile boolean bufferStrategyDirty = true;
+	private transient volatile Runnable closeRequest;
 
-	public GameWindow(String title, int width, int height, Controls controls) {
+	private GameWindow(String title, int width, int height, Controls controls) {
 		super(title);
 		if (width <= 0 || height <= 0) throw new IllegalArgumentException("Dimensions invalides : " + width + "x" + height);
+		Objects.requireNonNull(controls, "Controls null");
 		windowedWidth = width;
 		windowedHeight = height;
-		canvas = createCanvas(width, height, Objects.requireNonNull(controls, "Controls null"));
-		configureWindow();
+		canvas = createCanvas(width, height, controls);
+		configureWindow(controls);
+	}
+
+	public static GameWindow createOnEDT(String title, int width, int height, Controls controls) {
+		final GameWindow[] result = new GameWindow[1];
+		runOnEDTAndWait(() -> result[0] = new GameWindow(title, width, height, controls));
+		return result[0];
 	}
 
 	private Canvas createCanvas(int width, int height, Controls controls) {
@@ -55,20 +65,33 @@ public final class GameWindow extends JFrame {
 		return c;
 	}
 
-	private void configureWindow() {
-		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // ferme le programme lorsqu'on clique sur la croix rouge
+	private void configureWindow(Controls controls) {
+		setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 		setResizable(false); // ne peut pas être agrandi ou réduit
 		setIgnoreRepaint(true); // pas de rafraîchissement automatique de la fenêtre
+
+		addWindowFocusListener(new WindowAdapter() {
+			@Override
+			public void windowLostFocus(WindowEvent e) {
+				controls.clear();
+			}
+		});
+
+		addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) { // ferme le programme lorsqu'on clique sur la croix rouge
+				if (closeRequest != null) {
+					closeRequest.run();
+				}
+			}
+		});
 
 		add(canvas);
 		pack(); // ajuste la fenêtre selon la taille du canvas
 		setLocationRelativeTo(null); // centre la fenêtre
 		setVisible(true); // visible (après le pack()!)
 
-		EventQueue.invokeLater(() -> {
-			canvas.createBufferStrategy(3);
-			canvas.requestFocusInWindow();
-		});
+		EventQueue.invokeLater(canvas::requestFocusInWindow);
 	}
 
 	private static void runOnEDTAndWait(Runnable task) {
@@ -110,7 +133,7 @@ public final class GameWindow extends JFrame {
 			if (enabled) {
 				setUndecorated(true);
 				setResizable(false);
-				setBounds(GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds());
+				setBounds(getGraphicsConfiguration().getBounds());
 			} else {
 				setUndecorated(false);
 				setResizable(false);
@@ -123,6 +146,7 @@ public final class GameWindow extends JFrame {
 			markBufferStrategyDirty();
 
 			setVisible(true);
+			setAlwaysOnTop(enabled);
 			canvas.requestFocusInWindow();
 		});
 	}
@@ -152,5 +176,16 @@ public final class GameWindow extends JFrame {
 
 		return bs;
 	}
-	public void close() { dispose(); }
+
+	public void onCloseRequested(Runnable action) {
+		closeRequest = Objects.requireNonNull(action);
+	}
+
+	public void close() {
+		if (EventQueue.isDispatchThread()) {
+			dispose();
+		} else {
+			EventQueue.invokeLater(this::dispose);
+		}
+	}
 }

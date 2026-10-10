@@ -67,10 +67,10 @@ public final class Chipset {
 	}
 
 	/** Getters **/
-	public String getName() { return name; }
-	public int getTileSize() { return tileSize; }
-	public int getTileCount() { return tiles.length; }
-	public int getTileCountWidth() { return tileCountWidth; }
+	public String getName()         { return name; }
+	public int getTileSize()        { return tileSize; }
+	public int getTileCount()       { return tiles.length; }
+	public int getTileCountWidth()  { return tileCountWidth; }
 	public int getTileCountHeight() { return tileCountHeight; }
 	public BufferedImage getTile(int index) {
 		if (index < 0 || index >= tiles.length) throw new IndexOutOfBoundsException("Index tuile invalide : " + index);
@@ -83,6 +83,6 @@ public final class Chipset {
 	@Override
 	public String toString() {
 		return "Chipset[name=%s, tileSize=%d, tileCountHeight=%d, tileCountWidth=%d]"
-				.formatted(name, tileSize, tileCountHeight, tileCountWidth);
+					.formatted(name, tileSize, tileCountHeight, tileCountWidth);
 	}
 }

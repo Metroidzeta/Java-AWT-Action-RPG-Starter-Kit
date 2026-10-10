@@ -17,12 +17,17 @@ import core.events.Event_MSG;
 import core.events.Event_TP;
 import core.renderer.Renderer;
 
+import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferStrategy;
 import java.awt.Color;
+import java.awt.EventQueue;
+import java.util.ArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 
+import static core.Controls.GameKey.*;
 import static core.Config.DEBUG_MODE;
 import static core.Config.WINDOW_TITLE;
 import static core.Config.WINDOW_WIDTH;
@@ -33,6 +38,7 @@ public final class GameLoop {
     private static final long ATTACK_NANOS_COOLDOWN = 666_666_666L; // environ 667 ms (2/3 seconde)
     private static final long ATTACK_ACTIVE_NANOS = 50_000_000L; // 50 ms
     private static final int FLASK_ANIMATION_FRAME_COUNT = 3;
+    private static final int MAX_UPDATES_PER_FRAME = 5;
 
     private final GameContext gc;
     private final GameWindow gameWindow;
@@ -43,14 +49,19 @@ public final class GameLoop {
     private long frames = 0L;
     private double fpsResult = 0;
     private long attackStartedAt = 0L;
+    private long damageStartTimeNanos = 0L;
     private boolean wallsVisible, menuVisible;
     private int flaskFrame = 0, messageCooldown = 0;
-    //private int damageVisible = 0;
+    private boolean showDamage;
+    private boolean lastHitWasCritical;
     private boolean refreshNextFrame;
-    private EventGroup currentsEvents = null;
+    private EventGroup currentEventGroup = null;
 
     private final Hero hero;
     private final Camera camera;
+    private final ArrayList<Rectangle> hitEnemyHitboxes = new ArrayList<>();
+
+    private volatile boolean stopRequested;
 
     public GameLoop(GameContext gc, GameWindow gameWindow, Renderer renderer, Controls controls) {
         this.gc = gc;
@@ -61,8 +72,11 @@ public final class GameLoop {
         this.camera = gc.getCamera();
     }
 
+    public void requestStop() { stopRequested = true; }
+
     private void printFPS_Window() {
-        gameWindow.setTitle(String.format("%s | FPS : %.2f", WINDOW_TITLE, fpsResult));
+        String title = String.format("%s | FPS : %.2f", WINDOW_TITLE, fpsResult);
+        EventQueue.invokeLater(() -> gameWindow.setTitle(title));
     }
 
     private void renderFrame(Graphics g) {
@@ -92,20 +106,26 @@ public final class GameLoop {
 
     private void renderImmediately() {
         gc.resetCamera();
-        BufferStrategy bs = gameWindow.getCanvas().getBufferStrategy();
-        if (bs != null) {
-            Graphics g = bs.getDrawGraphics();
-            try {
-                renderer.drawBlackBackground(g);
-                camera.interpolate(1.0); // interpolation complète
-                renderFrame(g); // afficher directement la nouvelle carte
-                refreshNextFrame = true;
-            } finally {
-                g.dispose();
-                bs.show();
-                Toolkit.getDefaultToolkit().sync();
-            }
-        }
+        BufferStrategy bs = gameWindow.getOrCreateBufferStrategy();
+        if (bs == null) return;
+
+        camera.interpolate(1.0); // Interpolation complète
+        do {
+            do {
+                Graphics g = bs.getDrawGraphics();
+                try {
+                    renderFrame(g); // afficher directement la nouvelle carte
+                } finally {
+                    g.dispose();
+                }
+            } while (bs.contentsRestored());
+
+            bs.show();
+            Toolkit.getDefaultToolkit().sync();
+
+        } while (bs.contentsLost());
+
+        refreshNextFrame = true;
     }
 
     private void executeEvent(Event ev) {
@@ -115,7 +135,7 @@ public final class GameLoop {
         boolean isEvent_MSG = false;
         if (ev instanceof Event_MSG) { gc.clearMessage(); isEvent_MSG = true; }
         if (ev instanceof Event_TP) {
-            //damageVisible = 0;
+            showDamage = false;
             System.out.println("Teleportation de " + hero.getName() + " vers " + hero.getCurrentGameMap().getName() + hero.getPositionCellsString());
             renderImmediately();
         }
@@ -134,13 +154,13 @@ public final class GameLoop {
 
     private boolean updateHeroMovement() {
         // --- Déplacements avec flèches ---
-        final boolean arrowsPressed = controls.UP() || controls.DOWN() || controls.LEFT() || controls.RIGHT();
+        final boolean arrowsPressed = controls.isHeld(UP) || controls.isHeld(DOWN) || controls.isHeld(LEFT) || controls.isHeld(RIGHT);
         boolean moving = false;
         if (arrowsPressed && !hero.isBlocked()) {
-            if (controls.UP()    && !controls.DOWN())  moving = hero.move(Directions.UP);
-            if (controls.DOWN()  && !controls.UP())    moving = hero.move(Directions.DOWN)  || moving; // Ou moving car les autres directions peuvent fausser le résultat
-            if (controls.LEFT()  && !controls.RIGHT()) moving = hero.move(Directions.LEFT)  || moving;
-            if (controls.RIGHT() && !controls.LEFT())  moving = hero.move(Directions.RIGHT) || moving;
+            if (controls.isHeld(UP)    && !controls.isHeld(DOWN))  moving = hero.move(Direction.UP);
+            if (controls.isHeld(DOWN)  && !controls.isHeld(UP))    moving = hero.move(Direction.DOWN)  || moving; // Ou moving car les autres directions peuvent fausser le résultat
+            if (controls.isHeld(LEFT)  && !controls.isHeld(RIGHT)) moving = hero.move(Direction.LEFT)  || moving;
+            if (controls.isHeld(RIGHT) && !controls.isHeld(LEFT))  moving = hero.move(Direction.RIGHT) || moving;
         }
         if (!moving) {
             hero.setMoveFrame(7);
@@ -148,124 +168,137 @@ public final class GameLoop {
         return moving;
     }
 
-    private void updateUPS(long frameStartTime) {
+    private static boolean randomChance(float probability) {
+        if (probability <= 0.0f) return false;
+        if (probability >= 1.0f) return true;
+
+        final double randomValue = ThreadLocalRandom.current().nextDouble();
+        if (DEBUG_MODE) System.out.printf("randomValue = %f < probability = %f%n", randomValue, probability);
+
+        return randomValue < probability;
+    }
+
+    private void updateUPS(long now) {
+        controls.beginTick();
+        final String typedText = controls.getTypedText();
+        if (hero.isWriting() && !typedText.isEmpty()) gc.appendMessage(typedText);
+
         final boolean moving = updateHeroMovement();
         camera.update();
-        if (moving && !hero.isBlocked() && currentsEvents == null) {
-            currentsEvents = hero.getCurrentGameMap().findCollidingEvents(hero.getHitbox());
+        if (moving && !hero.isBlocked() && currentEventGroup == null) {
+            currentEventGroup = hero.getCurrentGameMap().findCollidingEvents(hero.getHitbox());
         }
-        if (currentsEvents != null && !hero.isInEvent()) {
-            Event ev = currentsEvents.getEventIfExists(0, gc.getNbEventPass());
+        if (currentEventGroup != null && !hero.isInEvent()) {
+            Event ev = currentEventGroup.getEventIfExists(0, gc.getNbEventPass());
             if (ev != null) executeEvent(ev);
         }
 
         if (!hero.isWriting()) {
-            if (controls.A()) {
+            if (controls.isPressed(A)) {
                 wallsVisible = !wallsVisible;
                 if (DEBUG_MODE) System.out.println((wallsVisible ? "Activation" : "Désactivation") + " de l'affichage des murs!");
-                controls.consume(Controls.GameKey.A);
             }
 
-            if (controls.B()) {
+            if (controls.isPressed(B)) {
                 gameWindow.setFullscreen(!gameWindow.isFullscreen());
-                controls.consume(Controls.GameKey.B);
             }
 
-            if (controls.Q()) {
+            if (controls.isPressed(Q)) {
                 isRunning = false;
-                controls.consume(Controls.GameKey.Q);
                 return;
             }
 
             if (!hero.isBlocked()) {
-                if (controls.S()) {
-                    if (hero.canSwordAttack()) {
-                        gc.getAudioManager().playSound("Blow1.wav");
-                        hero.updateSwordHitBox();
-						/*if (hero.getSwordHitbox().intersects(blob_hitbox)) {
-							resultatAleatoire = (double) rand() / RAND_MAX;
-							if (Config.DEBUG_MODE) System.out.println("resultatAleatoire = " + resultatAleatoire + " > tauxCrit = " + hero.getCritChanceRatio());
-							if (resultatAleatoire > hero.getCritChanceRatio()) {
-								System.out.println("Coup normal sur le monstre");
-								soundEffects.get(1).play();
-							} else {
-								System.out.println("Coup critique! sur le monstre");
-								soundEffects.get(2).play();
-							}
-							damageVisible = 1;
-						} */
-                        hero.setSwordAttack(true);
-                        hero.setCanSwordAttack(false);
-                        attackStartedAt = frameStartTime;
+                if (controls.isHeld(S) && hero.canSwordAttack()) {
+                    gc.getAudioManager().playSound("Blow1.wav");
+                    hero.updateSwordHitBox();
+                    Rectangle swordHitbox = hero.getSwordHitbox();
+                    boolean first = true;
+                    boolean criticalHit = false;
+                    for (Enemy enemy : hero.getCurrentGameMap().getEnemies()) {
+                        final Rectangle enemyHitBox = enemy.getHitbox();
+                        if (swordHitbox.intersects(enemyHitBox)) {
+                            if (first) {
+                                criticalHit = randomChance(hero.getCritChanceRatio());
+                                hitEnemyHitboxes.clear();
+                                first = false;
+                            }
+                            if (criticalHit) {
+                                if (DEBUG_MODE) System.out.println("Coup critique! sur l'ennemi");
+                                gc.getAudioManager().playSound("Damage3.ogg");
+                                lastHitWasCritical = true;
+                            } else {
+                                if (DEBUG_MODE) System.out.println("Coup normal sur l'ennemi");
+                                gc.getAudioManager().playSound("Kill1.wav");
+                                lastHitWasCritical = false;
+                            }
+                            hitEnemyHitboxes.add(enemyHitBox);
+                            showDamage = true;
+                            damageStartTimeNanos = now;
+                        }
                     }
-                    controls.consume(Controls.GameKey.S);
+                    hero.setSwordAttack(true);
+                    hero.setCanSwordAttack(false);
+                    attackStartedAt = now;
                 }
             }
         }
 
-        if (controls.BACK_SPACE()) {
+        if (controls.isPressed(BACK_SPACE)) {
             if (hero.isWriting()) gc.deleteLastCharacterMessage();
-            controls.consume(Controls.GameKey.BACK_SPACE);
         }
 
-        if (controls.ENTER()) {
+        if (controls.isPressed(ENTER)) {
             if (!hero.isBlocked()) {
                 boolean isWriting = hero.isWriting();
-                hero.setIsWriting(!isWriting);
-                if (isWriting && !gc.getMessage().isEmpty()) {
+                gc.setWritingMode(!isWriting);
+                if (isWriting && !gc.messageIsEmpty()) {
                     messageCooldown = 0;
                     hero.setHasOverheadMessage(true);
-                    System.out.println(hero.getName() + " : " + gc.getMessage());
+                    System.out.println(hero.getName() + " : " + gc.getMessageText());
                     //ajouterMessageHistorique();
                     gc.saveMessage();
                     gc.clearMessage();
                 }
             }
-            controls.consume(Controls.GameKey.ENTER);
         }
 
-        if (controls.SPACE()) {
-            if (hero.isInEvent() && currentsEvents != null && currentsEvents.getEventIfExists(0, gc.getNbEventPass()) instanceof Event_MSG) {
+        if (controls.isPressed(SPACE)) {
+            if (hero.isInEvent() && currentEventGroup != null && currentEventGroup.getEventIfExists(0, gc.getNbEventPass()) instanceof Event_MSG) {
                 gc.incrementNbEventPass();
                 hero.setIsInEvent(false);
             }
-            controls.consume(Controls.GameKey.SPACE);
         }
 
-        if (controls.ESCAPE()) {
-            if (currentsEvents == null) {
+        if (controls.isPressed(ESCAPE)) {
+            if (currentEventGroup == null) {
                 //afficherRecap = 0;
                 menuVisible = !menuVisible;
                 if (menuVisible) {
-                    hero.setIsWriting(false);
+                    gc.setWritingMode(false);
                     gc.clearMessage();
                     hero.setMoveFrame(7);
                 }
                 hero.setIsBlocked(!(hero.isBlocked()));
-                controls.consume(Controls.GameKey.ESCAPE);
             }
         }
 
         if (!hero.isBlocked()) {
-            if (controls.F1()) {
-                controls.consume(Controls.GameKey.F1);
-            }
-            if (controls.F3()) {
-                hero.setIsWriting(true);
+            //if (controls.isPressed(F1)) {}
+            if (controls.isPressed(F3)) {
+                gc.setWritingMode(true);
                 gc.clearMessage();
                 gc.restoreLastMessage();
-                controls.consume(Controls.GameKey.F3);
             }
         }
 
-        if (controls.F5()) {
+        if (controls.isPressed(F5)) {
             renderer.getContext().nextBoxColor();
-            controls.consume(Controls.GameKey.F5);
         }
 
-        if (currentsEvents != null && currentsEvents.isFinished(0, gc.getNbEventPass())) {
+        if (currentEventGroup != null && currentEventGroup.isFinished(0, gc.getNbEventPass())) {
             gc.resetNbEventPass();
-            currentsEvents = null;
+            currentEventGroup = null;
             hero.setIsBlocked(false);
         }
     }
@@ -298,7 +331,20 @@ public final class GameLoop {
         renderer.drawLayer(g, 1); // couche 1 chipset
         if (wallsVisible) renderer.drawWalls(g);
         renderer.drawHero(g);
+        renderer.drawEnemies(g);
         renderer.drawLayer(g, 2); // couche 2 chipset
+
+        if (showDamage) {
+            final long elapsedNanos = System.nanoTime() - damageStartTimeNanos;
+            final double t = Math.clamp(elapsedNanos / 1_000_000_000.0, 0.0, 1.0);
+
+            if (t >= 1.0) {
+                showDamage = false;
+            } else {
+                renderer.drawDamage(g, lastHitWasCritical ? 64 : 32, lastHitWasCritical ? Color.RED : Color.WHITE, t, hitEnemyHitboxes);
+            }
+        }
+
         if (hero.swordAttack()) {
             renderer.drawHeroSwordHitbox(g);
         }
@@ -307,10 +353,10 @@ public final class GameLoop {
         renderer.drawMpFlask(g, flaskFrame);
         renderer.drawXpBar(g);
 
-        if (hero.isWriting()) renderer.drawTextInputBox(g, gc.getMessage().toString());
-        if (hero.hasOverheadMessage()) renderer.drawHeroOverheadMessage(g, gc.getLastMessage().toString());
-        if (hero.isInEvent() && currentsEvents != null) {
-            final Event ev = currentsEvents.getEventIfExists(0, gc.getNbEventPass());
+        if (hero.isWriting()) renderer.drawTextInput(g, gc.getMessageText());
+        if (hero.hasOverheadMessage()) renderer.drawHeroOverheadMessage(g, gc.getLastMessageText());
+        if (hero.isInEvent() && currentEventGroup != null) {
+            final Event ev = currentEventGroup.getEventIfExists(0, gc.getNbEventPass());
             if (ev instanceof Event_MSG ev_msg) renderer.drawEventMessage(g, ev_msg.getMessage());
         }
 
@@ -319,7 +365,7 @@ public final class GameLoop {
             renderer.drawStatsMenu(g); // affiche sous-menu: statistiques
         }
         renderer.drawAlignment(g);
-        renderer.drawFPS(g, fpsResult);
+        renderer.drawFPS(g);
         if (refreshNextFrame) {
             renderer.drawComputePalette(g);
             refreshNextFrame = false;
@@ -353,7 +399,7 @@ public final class GameLoop {
         isRunning = true;
 
         // --- Boucle principale ---
-        while (isRunning) {
+        while (isRunning && !stopRequested) {
             nowNanos = System.nanoTime();
 
             // --- Détection d'une longue pause (veille, freeze, etc.) ---
@@ -389,6 +435,7 @@ public final class GameLoop {
                 final long elapsedFrames = frames - lastFrameCount;
                 final double elapsedSec = (nowNanos - lastSecond) / 1e9;
                 fpsResult = elapsedFrames / elapsedSec;
+                renderer.setFPSText(fpsResult);
                 printFPS_Window();
                 if (DEBUG_MODE) System.out.println("FPS = " + fpsResult);
                 lastFrameCount = frames;
@@ -398,18 +445,24 @@ public final class GameLoop {
             // --- Chaque minute ---
             if (nowNanos - lastMinute >= NANOS_1MIN) {
                 hero.addAlignment(1);
+                renderer.setAlignmentText(hero.getAlignment());
                 lastMinute += NANOS_1MIN;
             }
 
             // --- Updates logiques (UPS) ---
-            while (nowNanos >= nextTick) {
+            int updates = 0;
+            while (nowNanos >= nextTick && updates < MAX_UPDATES_PER_FRAME) {
                 updateUPS(nowNanos);
-                if (!isRunning) break;
+                if (!isRunning || stopRequested) break;
                 nextTick += NANOS_PER_TICK;
+                updates++;
                 nowNanos = System.nanoTime(); // anti dérive
             }
+            if (updates == MAX_UPDATES_PER_FRAME && nowNanos >= nextTick) {
+                nextTick = nowNanos + NANOS_PER_TICK;
+            }
 
-            if (!isRunning) break; // quitte la boucle principale avant le rendu
+            if (!isRunning || stopRequested) break; // quitte la boucle principale avant le rendu
 
             // --- Rendu graphique (FPS) ---
             if (nowNanos >= nextRender) {
@@ -422,6 +475,11 @@ public final class GameLoop {
                 nextRender += NANOS_PER_RENDER;
 
                 nowNanos = System.nanoTime(); // important avant le calcul du sleep
+
+                if (nowNanos >= nextRender) {
+                    final long missedFrames = (nowNanos - nextRender) / NANOS_PER_RENDER + 1L;
+                    nextRender += missedFrames * NANOS_PER_RENDER;
+                }
             }
 
             // --- Gestion du CPU ---
@@ -433,127 +491,10 @@ public final class GameLoop {
                 try { Thread.sleep(sleepNanos / 1_000_000L, (int) (sleepNanos % 1_000_000L)); }
                 catch (InterruptedException e) { Thread.currentThread().interrupt(); isRunning = false; break; }
                 long after = System.nanoTime();
-                overSleepNanos = (after - before) - sleepNanos;
+                overSleepNanos = Math.max(0L, (after - before) - sleepNanos);
                 noDelays = 0;
             } else {
                 overSleepNanos = 0L;
-                if (++noDelays >= NO_DELAYS_PER_YIELD) {
-                    Thread.yield();
-                    noDelays = 0;
-                }
-            }
-        }
-    }
-
-    public void start2() {
-        // --- Constantes temporelles ---
-        final double MILLIS_PER_RENDER   = 1e3 / Config.FPS;
-        final double MILLIS_PER_TICK     = 1e3 / Config.UPS;
-        final long MS_588MS              = 588L; // 588 ms
-        final long MS_1SEC               = 1_000L; // 1 seconde
-        final long MS_1MIN               = 60_000L; // 1 minute
-        final long MAX_FRAME_SKIP_MILLIS = 5_000L; // 5 secondes
-        final int NO_DELAYS_PER_YIELD = 16;
-
-        // --- Variables de synchronisation ---
-        long now = System.currentTimeMillis();
-        double nextRender = (double) now;
-        double nextTick   = (double) now;
-
-        // --- Timers secondaires ---
-        long lastFlaskTime = now, lastMinute = now, lastSecond = now;
-        long overSleepMillis = 0L;
-        int noDelays = 0;
-
-        // --- Initialisation ---
-        long lastFrameCount = 0L;
-        gc.getAudioManager().playMusic(hero.getCurrentGameMap().getMusic());
-        isRunning = true;
-
-        // --- Boucle principale ---
-        while (isRunning) {
-            now = System.currentTimeMillis();
-
-            // --- Détection d'une longue pause (veille, freeze, etc.) ---
-            if (now - nextTick > MAX_FRAME_SKIP_MILLIS) {
-                nextTick = (double) now + MILLIS_PER_TICK;
-                nextRender = (double) now + MILLIS_PER_RENDER;
-
-                lastFlaskTime = now;
-                lastMinute = now;
-                lastSecond = now;
-                lastFrameCount = frames;
-
-                overSleepMillis = 0L;
-                noDelays = 0;
-            }
-
-            // --- Logique globale ---
-            updateCooldowns(now * 1_000_000L);
-
-            // --- Animations fioles ---
-            if (now - lastFlaskTime >= MS_588MS) {
-                flaskFrame = (flaskFrame + 1) % FLASK_ANIMATION_FRAME_COUNT;
-                lastFlaskTime += MS_588MS;
-            }
-
-            // --- Chaque Seconde ---
-            if (now - lastSecond >= MS_1SEC) {
-                if (hero.hasOverheadMessage() && ++messageCooldown == 6) { // Si il y a déjà un message sur la tête du héros et que ça se termine
-                    messageCooldown = 0;
-                    hero.setHasOverheadMessage(false);
-                }
-                final long elapsedFrames = frames - lastFrameCount;
-                final double elapsedSec = (now - lastSecond) / 1e3;
-                fpsResult = elapsedFrames / elapsedSec;
-                if (DEBUG_MODE) System.out.println("FPS = " + fpsResult);
-                printFPS_Window();
-                lastFrameCount = frames;
-                lastSecond += MS_1SEC;
-            }
-
-            // --- Chaque Minute ---
-            if (now - lastMinute >= MS_1MIN) {
-                hero.addAlignment(1);
-                lastMinute += MS_1MIN;
-            }
-
-            // --- Updates logiques (UPS) ---
-            while (now >= nextTick) {
-                updateUPS(now * 1_000_000L);
-                if (!isRunning) break;
-                nextTick += MILLIS_PER_TICK;
-                now = System.currentTimeMillis(); // anti dérive
-            }
-
-            if (!isRunning) break; // quitte la boucle principale avant le rendu
-
-            // ---- Rendu Graphique (FPS) ----
-            while (now >= nextRender) {
-                // calcul du facteur d'interpolation entre deux updates logiques
-                double interpolation = (now - (nextTick - MILLIS_PER_TICK)) / MILLIS_PER_TICK;
-                interpolation = Math.clamp(interpolation, 0.0, 1.0); // intervalle [0..1]
-
-                camera.interpolate(interpolation);
-                updateFPS();
-                nextRender += MILLIS_PER_RENDER;
-
-                now = System.currentTimeMillis(); // important avant le calcul du sleep
-            }
-
-            // --- Gestion du CPU ---
-            final long nextAction = (long) Math.min(nextTick, nextRender);
-            long sleepTime = Math.max(0L, nextAction - System.currentTimeMillis() - overSleepMillis);
-
-            if (sleepTime > 0L) {
-                long before = System.currentTimeMillis();
-                try { Thread.sleep(sleepTime); }
-                catch (InterruptedException e) { Thread.currentThread().interrupt(); isRunning = false; break; }
-                long after = System.currentTimeMillis();
-                overSleepMillis = (after - before) - sleepTime;
-                noDelays = 0;
-            } else {
-                overSleepMillis = 0L;
                 if (++noDelays >= NO_DELAYS_PER_YIELD) {
                     Thread.yield();
                     noDelays = 0;

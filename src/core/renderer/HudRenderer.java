@@ -31,20 +31,34 @@ public final class HudRenderer {
 	private record Zone(int x1, int y1, int x2, int y2) {}
 
 	private final int[] VA = { 68, 73, 53, 29, 241, 203, 166, 136, 139, 62 };
+	private final static List<String> OPTIONS_MENU = List.of("Inventaire", "Magie", "Statistiques", "Echanger", "Quitter");
 	private final Font dialogFont = new Font("Dialog", Font.PLAIN, 12);
 
 	private final Hero hero;
 	private final RendererContext ctx;
 	private final BufferedImage flasksTexture, xpBarTexture;
 
+	private long cachedFps = -1;
+	private String fpsText;
+
+	private int cachedAlignment = -1;
+	private String alignmentText;
+
 	private final Zone zoneHpFlask = new Zone(1, WH_69PERCENT, 1 + WW_4PERCENT, WH_94PERCENT);
 	private final Zone zoneMpFlask = new Zone(WW_96PERCENT - 1, WH_69PERCENT, WINDOW_WIDTH - 1, WH_94PERCENT);
+
+	private final Rectangle boxTextInput = new Rectangle(WW_3PERCENT, WH_95PERCENT, WW_94PERCENT, WH_4PERCENT);
+	private final Rectangle boxEventMessage = new Rectangle(WW_17_5PERCENT, WH_2PERCENT, WW_65PERCENT, WH_20PERCENT);
+	private final Rectangle boxNavigationMenu = new Rectangle(WW_1PERCENT, WH_37PERCENT, WW_15PERCENT, WH_26PERCENT);
+	private final Rectangle boxStatsMenu = new Rectangle(WW_17PERCENT, WH_1PERCENT, WW_80PERCENT, WH_98PERCENT);
 
 	public HudRenderer(Hero hero, RendererContext ctx, BufferedImage flasksTexture, BufferedImage xpBarTexture) {
 		this.hero = Objects.requireNonNull(hero, "Hero null");
 		this.ctx = Objects.requireNonNull(ctx, "RendererContext null");
 		this.flasksTexture = Objects.requireNonNull(flasksTexture, "FlasksTexture null");
 		this.xpBarTexture = Objects.requireNonNull(xpBarTexture, "xpBarTexture null");
+		setFPSText(0.0);
+		setAlignmentText(hero.getAlignment());
 	}
 
 	/** Affichage - Interface **/
@@ -58,14 +72,27 @@ public final class HudRenderer {
 		ctx.drawText(g, LIGHT_GRAY_TRANSPARENT, dialogFont, sb.toString(), 0, 0);
 	}
 
-	public void drawFPS(Graphics g, double fpsResult) {
-		ctx.drawText(g, Color.GREEN, ctx.getFpsFont(),
-					String.format("FPS: %.2f", fpsResult), WW_4PERCENT, WH_2PERCENT);
+	public void setFPSText(double fps) {
+		final long roundedFps = Math.round(fps * 100.0);
+		if (cachedFps != roundedFps) {
+			cachedFps = roundedFps;
+			fpsText = String.format("FPS: %.2f", roundedFps / 100.0);
+		}
+	}
+
+	public void drawFPS(Graphics g) {
+		ctx.drawText(g, Color.GREEN, ctx.getFpsFont(), fpsText, WW_4PERCENT, WH_2PERCENT);
+	}
+
+	public void setAlignmentText(int alignment) {
+		if (cachedAlignment != alignment) {
+			cachedAlignment = alignment;
+			alignmentText = String.format("Align : %d", alignment);
+		}
 	}
 
 	public void drawAlignment(Graphics g) {
-		ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(),
-				String.format("Align : %d", hero.getAlignment()), WW_84PERCENT, WH_2PERCENT);
+		ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), alignmentText, WW_84PERCENT, WH_2PERCENT);
 	}
 
 	public void drawHpFlask(Graphics g, int flaskFrame) {
@@ -88,40 +115,28 @@ public final class HudRenderer {
 		g.drawImage(xpBarTexture, WW_2PERCENT, WH_95PERCENT, WW_96PERCENT, WH_8PERCENT, null);
 	}
 
-	public void drawTextInputBox(Graphics g, String message) {
-		final Rectangle box = new Rectangle(WW_3PERCENT, WH_95PERCENT, WW_94PERCENT, WH_4PERCENT);
-		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), box);
-		ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), message, WW_3PERCENT, WH_95PERCENT);
+	public void drawTextInput(Graphics g, String message) {
+		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), boxTextInput);
+		ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), message, boxTextInput.x, boxTextInput.y);
 	}
 
 	/** Affichages - Interface menu **/
 	public void drawNavigationMenu(Graphics g) {
-		final int xMargin = WW_1PERCENT, yMargin = WH_1PERCENT;
-		final int xBox = xMargin, yBox = WH_37PERCENT;
+		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), boxNavigationMenu);
 
-		final Rectangle box = new Rectangle(xBox, yBox, WW_15PERCENT, WH_26PERCENT);
-		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), box);
+		final int xText = boxNavigationMenu.x + WW_1PERCENT;
+		final int yText = boxNavigationMenu.y + WH_1PERCENT;
 
-		final int xText = xBox + xMargin;
-		final int yText = yBox + yMargin;
-		final int yLineOffset = WH_5PERCENT; // décalage pour sauter une ligne
-
-		List<String> options = List.of("Inventaire", "Magie", "Statistiques", "Echanger", "Quitter");
-		for (int i = 0; i < options.size(); i++) {
-			ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), options.get(i), xText, yText + i * yLineOffset);
+		for (int i = 0; i < OPTIONS_MENU.size(); i++) {
+			ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), OPTIONS_MENU.get(i), xText, yText + i * WH_5PERCENT);
 		}
 	}
 
 	public void drawStatsMenu(Graphics g) {
-		final int xMargin = WW_1PERCENT, yMargin = WH_1PERCENT;
-		final int xBox = WW_17PERCENT, yBox = yMargin;
+		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), boxStatsMenu);
 
-		final Rectangle box = new Rectangle(xBox, yBox, WW_80PERCENT, WH_98PERCENT);
-		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), box);
-
-		final int xText = xBox + xMargin;
-		final int yText = yBox + yMargin;
-		final int yLineOffset = WH_5PERCENT; // décalage pour sauter une ligne
+		final int xText = boxStatsMenu.x + WW_1PERCENT;
+		final int yText = boxStatsMenu.y + WH_1PERCENT;
 
 		List<String> lines = List.of(
 				"Nom : "    + hero.getName(),
@@ -138,19 +153,14 @@ public final class HudRenderer {
 
 		for (int i = 0; i < lines.size(); i++) {
 			if (!lines.get(i).isEmpty()) {
-				ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), lines.get(i), xText, yText + i * yLineOffset);
+				ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), lines.get(i), xText, yText + i * WH_5PERCENT);
 			}
 		}
 	}
 
 	/** Affichages - Messages **/
 	public void drawEventMessage(Graphics g, String msg) {
-		final int boxWidth = WW_65PERCENT;
-		final int x = WW_17_5PERCENT;
-		final int y = WH_2PERCENT;
-
-		final Rectangle box = new Rectangle(x, y, boxWidth, WH_20PERCENT);
-		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), box);
-		ctx.drawWrappedText(g, Color.WHITE, ctx.getDefaultFont(), msg, boxWidth - 10, x, y);
+		ctx.drawRectangle(g, ctx.getCurrentBoxColor(), boxEventMessage);
+		ctx.drawWrappedText(g, Color.WHITE, ctx.getDefaultFont(), msg, boxEventMessage.width - 10, boxEventMessage.x, boxEventMessage.y);
 	}
 }

@@ -12,7 +12,7 @@
  */
 package core;
 
-public class Main {
+public final class Main {
 
     private Main() { throw new AssertionError("La classe Main ne doit pas être instanciée."); } // Empêche toute instanciation
 

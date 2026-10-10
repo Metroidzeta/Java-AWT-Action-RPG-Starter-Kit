@@ -18,7 +18,6 @@ public enum HeroClass {
 	ROGUE("Voleur");
 
 	private final String displayName;
-
 	HeroClass(String displayName) { this.displayName = displayName; }
 
 	@Override

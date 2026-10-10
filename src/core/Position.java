@@ -14,7 +14,6 @@ package core;
 
 import static core.Config.CELL_SIZE;
 
-import java.awt.Rectangle;
 import java.util.Objects;
 
 public final class Position {
@@ -24,21 +23,16 @@ public final class Position {
 	public Position(int x, int y) { this.x = x; this.y = y; }
 
 	/** Getters **/
-	public int getX() { return x; }
-	public int getY() { return y; }
+	public int getX()     { return x; }
+	public int getY()     { return y; }
 	public int getXCell() { return x / CELL_SIZE; }
 	public int getYCell() { return y / CELL_SIZE; }
 
 	/** Setters **/
-	public void set(int x, int y) { this.x = x; this.y = y; }
+	public void set(int x, int y)    { this.x = x; this.y = y; }
 	public void move(int dx, int dy) { x += dx; y += dy; }
 
 	/** Autres méthodes **/
-	public Rectangle getRectHitbox(int size) {
-		if (size < 1) throw new IllegalArgumentException("La taille doit être >= 1");
-		return new Rectangle(x, y, size, size);
-	}
-
 	@Override
 	public String toString() { return "(" + x + "," + y + ")"; }
 	public String toStringCells() { return "(" + (x / CELL_SIZE) + "," + (y / CELL_SIZE) + ")"; }

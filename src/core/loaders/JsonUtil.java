@@ -27,10 +27,17 @@ final class JsonUtil {
 		if (obj == null || !obj.has(key)) return false;
 
 		final JsonElement element = obj.get(key);
+		if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) return false;
 
-		return element.isJsonPrimitive()
-				&& element.getAsJsonPrimitive().isNumber()
-				&& INTEGER_PATTERN.matcher(element.getAsString()).matches();
+		final String value = element.getAsString();
+		if (!INTEGER_PATTERN.matcher(value).matches()) return false;
+
+		try {
+			Integer.parseInt(value);
+			return true;
+		} catch (NumberFormatException e) {
+			return false;
+		}
 	}
 
 	public static boolean isStringKey(JsonObject obj, String key) {
@@ -38,8 +45,7 @@ final class JsonUtil {
 
 		final JsonElement element = obj.get(key);
 
-		return element.isJsonPrimitive()
-				&& element.getAsJsonPrimitive().isString();
+		return element.isJsonPrimitive() && element.getAsJsonPrimitive().isString();
 	}
 
 	public static boolean isArrayKey(JsonObject obj, String key) {

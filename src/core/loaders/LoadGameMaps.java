@@ -18,7 +18,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import core.GameMap;
 import core.Chipset;
-import core.Game;
 import core.resources.Music;
 import static core.Config.GAME_MAP_DIRECTORY;
 
@@ -112,8 +111,7 @@ public final class LoadGameMaps {
 				final int value = src[i][j];
 
 				if (value != 0 && value != 1) {
-					System.err.println("[ERREUR] Valeur de mur invalide " + value + " à la position [ligne: " + i + ", colonne: " + j + "]");
-					continue;
+					throw new IllegalArgumentException("Valeur de mur invalide " + value + " à (i,j) : [" + i + ", " + j + "]");
 				}
 
 				dst[i][j] = (value == 1);
@@ -131,8 +129,7 @@ public final class LoadGameMaps {
 			final int[][] wallsInt = matrixHasValidDimensions(GSON.fromJson(root.get("murs"), int[][].class), height, width, gameMapName, "murs");
 			return convertWallsToBooleans(wallsInt, height, width);
 		} catch (Exception e) {
-			System.err.println("[ERREUR] Lecture murs de " + gameMapName + " : " + e.getMessage());
-			return new boolean[height][width];
+			throw new IllegalStateException("Impossible de charger les murs de " + gameMapName, e);
 		}
 	}
 
@@ -172,17 +169,17 @@ public final class LoadGameMaps {
 			gameMaps.add(new GameMapData(gameMapName, width, height, chipsetName, musicName, l0, l1, l2, walls));
 
 		} catch (Exception e) {
-			System.err.println("[ERREUR] Fichier " + path.getFileName() + " : " + e.getMessage());
+			throw new IllegalStateException("Impossible de charger la carte du fichier : " + path.toAbsolutePath(), e);
 		}
 	}
 
-	private static void addGameMap(GameMapData elem, Map<String, GameMap> gameMaps, Game game) {
-		final Chipset chipset = game.getChipset(elem.chipsetName());
+	private static void addGameMap(GameMapData elem, Map<String, GameMap> gameMaps, Map<String, Chipset> chipsets, Map<String, Music> musics) {
+		final Chipset chipset = chipsets.get(elem.chipsetName());
 		if (chipset == null) throw new IllegalArgumentException("[ERREUR] Chipset \"" + elem.chipsetName() + "\" introuvable pour la carte \"" + elem.gameMapName() + "\"");
 
 		Music music = null;
 		if (elem.musicName() != null) {
-			music = game.getMusic(elem.musicName());
+			music = musics.get(elem.musicName());
 			if (music == null) throw new IllegalArgumentException("[ERREUR] Musique \"" + elem.musicName() + "\" introuvable pour la carte \"" + elem.gameMapName() + "\"");
 		}
 
@@ -192,11 +189,12 @@ public final class LoadGameMaps {
 	}
 
 	/** Getters **/
-	public static Map<String, GameMap> get(Game game) {
-		Objects.requireNonNull(game, "Game ne peut pas être null");
+	public static Map<String, GameMap> load(Map<String, Chipset> chipsets, Map<String, Music> musics) {
+		Objects.requireNonNull(chipsets, "Map: chipsets null");
+		Objects.requireNonNull(musics, "Map: musics null");
 		final List<GameMapData> gameMapsData = getGameMaps();
 		final Map<String, GameMap> gameMaps = new HashMap<>(gameMapsData.size());
-		gameMapsData.forEach(elem -> addGameMap(elem, gameMaps, game));
+		gameMapsData.forEach(elem -> addGameMap(elem, gameMaps, chipsets, musics));
 		return Map.copyOf(gameMaps);
 	}
 }

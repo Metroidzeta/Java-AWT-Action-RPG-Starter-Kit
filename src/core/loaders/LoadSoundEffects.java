@@ -24,15 +24,28 @@ public final class LoadSoundEffects {
 
 	private LoadSoundEffects() { throw new AssertionError("La classe LoadSoundEffects ne doit pas être instanciée."); } // Empêche toute instanciation
 
-	private static final List<SoundEffect> SOUND_EFFECTS_LIST = List.of( // Création des bruitages : new SoundEffect(fileName)
-		new SoundEffect("Blow1.wav"),                                // 0
-		new SoundEffect("Kill1.wav")                                 // 1
+	private static final List<String> SOUND_EFFECT_FILENAMES_LIST = List.of( // Création des bruitages : "fileName"
+		"Blow1.wav",                                       // 0
+		"Kill1.wav",                                       // 1
+		"Damage3.ogg"                                      // 2
 	);
 
 	/** Getters **/
-	public static Map<String, SoundEffect> get() {
-		final Map<String, SoundEffect> soundEffects = new HashMap<>(SOUND_EFFECTS_LIST.size());
-		SOUND_EFFECTS_LIST.forEach(soundEffect -> soundEffects.put(soundEffect.getName(), soundEffect));
-		return Map.copyOf(soundEffects);
+	public static Map<String, SoundEffect> load() {
+		final Map<String, SoundEffect> soundEffects = new HashMap<>(SOUND_EFFECT_FILENAMES_LIST.size());
+		try {
+			for (String fileName : SOUND_EFFECT_FILENAMES_LIST) {
+				final SoundEffect soundEffect = new SoundEffect(fileName);
+				final SoundEffect previous = soundEffects.putIfAbsent(soundEffect.getName(), soundEffect);
+				if (previous != null) {
+					soundEffect.close();
+					throw new IllegalStateException("Bruitage dupliqué : " + soundEffect.getName());
+				}
+			}
+			return Map.copyOf(soundEffects);
+		} catch (RuntimeException e) {
+			soundEffects.values().forEach(SoundEffect::close);
+			throw e;
+		}
 	}
 }

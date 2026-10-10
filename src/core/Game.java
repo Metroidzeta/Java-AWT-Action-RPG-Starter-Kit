@@ -32,15 +32,16 @@ import java.nio.file.Path;
  */
 public final class Game {
 
-	private final Controls controls = Controls.getInstance();
+	private final Controls controls = new Controls();
 
-	private final Map<String, BufferedImage> uiAssets = LoadUiAssets.get();
-	private final Map<String, Skin> skins = LoadSkins.get();
-	private final Map<String, Font> fonts = LoadFonts.get();
-	private final Map<String, Music> musics = LoadMusics.get();
-	private final Map<String, SoundEffect> soundEffects = LoadSoundEffects.get();
-	private final Map<String, Chipset> chipsets = LoadChipsets.get();
-	private final Map<String, GameMap> gameMaps = LoadGameMaps.get(this);
+	private final Map<String, BufferedImage> uiAssets = LoadUiAssets.load();
+	private final Map<String, Skin> skins = LoadSkins.load();
+	private final Map<String, EnemyData> enemiesData = LoadEnemiesData.load();
+	private final Map<String, Font> fonts = LoadFonts.load();
+	private final Map<String, Music> musics;
+	private final Map<String, SoundEffect> soundEffects;
+	private final Map<String, Chipset> chipsets = LoadChipsets.load();
+	private final Map<String, GameMap> gameMaps;
 
 	private final GameWindow gameWindow;
 	private final Hero hero;
@@ -62,20 +63,61 @@ public final class Game {
 
 	/** Constructeur **/
 	public Game() {
-		gameWindow = new GameWindow(WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT, controls);
-		String heroName = loadHeroNameFromFile("PSEUDO.txt");
-		hero = new Hero(heroName, getSkin("Evil.png"), HeroClass.ROGUE, 1, 1000, 12, 12, getGameMap("Chateau_Roland_Cour_Interieure"), 10);
-		gc = new GameContext(hero, soundEffects);
-		gc.resetCamera();
-		LoadEvents.inject(this);
-		controls.setTargets(hero, gc.getMessage(), gc.getMessageLock());
-		renderer = new Renderer(gc.getCamera(), hero, getFont("FPS"), getFont("Normal"), getUiAsset("Fioles"), getUiAsset("BarreXp"));
-		gameLoop = new GameLoop(gc, gameWindow, renderer, controls);
+		Map<String, Music> loadedMusics = null;
+		Map<String, SoundEffect> loadedSounds = null;
+		GameWindow createdWindow = null;
+
+		try {
+			// Chargement des ressources audio
+			loadedMusics = LoadMusics.load();
+			loadedSounds = LoadSoundEffects.load();
+			musics = loadedMusics;
+			soundEffects = loadedSounds;
+
+			// Chargement des cartes
+			gameMaps = LoadGameMaps.load(chipsets, musics);
+
+			// Initialisation du jeu
+			String heroName = loadHeroNameFromFile("PSEUDO.txt");
+			hero = new Hero(heroName, getSkin("Evil.png"), HeroClass.ROGUE, 1, 1000, 12, 12,
+					getGameMap("Chateau_Roland_Cour_Interieure"), 10);
+			gc = new GameContext(hero, soundEffects, musics, controls);
+			gc.resetCamera();
+			LoadEvents.load(gameMaps, musics);
+			LoadEnemies.load(gameMaps, enemiesData);
+
+			// Création de la fenêtre
+			createdWindow = GameWindow.createOnEDT(WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT, controls);
+			gameWindow = createdWindow;
+
+			renderer = new Renderer(gc.getCamera(), hero, getFont("FPS"), getFont("Normal"), getUiAsset("Fioles"), getUiAsset("BarreXp"));
+			gameLoop = new GameLoop(gc, gameWindow, renderer, controls);
+			gameWindow.onCloseRequested(gameLoop::requestStop);
+
+		} catch (RuntimeException | Error failure) {
+			if (createdWindow != null) { // Fermer la fenêtre si elle a déjà été créée
+				try { createdWindow.close(); } catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+			}
+
+			// Libérer les ressources déjà chargées
+			closeOnFailure(loadedSounds, failure);
+			closeOnFailure(loadedMusics, failure);
+
+			throw failure;
+		}
+	}
+
+	private static void closeOnFailure(Map<String, ? extends AutoCloseable> resources, Throwable failure) {
+		if (resources == null) return;
+		for (AutoCloseable resource : resources.values()) {
+			try { resource.close();} catch (Exception cleanup) { failure.addSuppressed(cleanup); }
+		}
 	}
 
 	/** Getters **/
 	public BufferedImage getUiAsset(String name)   { return uiAssets.get(name); } // Recherche en O(1)
 	public Skin getSkin(String name)               { return skins.get(name); }
+	public EnemyData getEnemyData(String name)     { return enemiesData.get(name); }
 	public Font getFont(String name)               { return fonts.get(name); }
 	public Music getMusic(String name)             { return musics.get(name); }
 	public SoundEffect getSoundEffect(String name) { return soundEffects.get(name); }
@@ -87,8 +129,11 @@ public final class Game {
 		try {
 			gameLoop.start();
 		} finally {
-			gc.getAudioManager().freeAudioResources();
-			gameWindow.close();
+			try {
+				gc.getAudioManager().close();
+			} finally {
+				gameWindow.close();
+			}
 		}
 	}
 }

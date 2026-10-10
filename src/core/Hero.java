@@ -25,7 +25,7 @@ import java.util.Objects;
 /**
  * Représente le héros contrôlé par le joueur : nom, skin, classe, position, statistiques et état de jeu.
  */
-public final class Hero implements Camera.CamLock {
+public final class Hero implements Camera.CameraTarget {
 
 	private static final class Statistics { // Initialisation des Stats de base
 		static final int FORCE        = 12;
@@ -51,25 +51,26 @@ public final class Hero implements Camera.CamLock {
 	private int constitution = Statistics.CONSTITUTION;
 	private final Gauge hpGauge = new Gauge(Statistics.HP, Statistics.HP); // HP / HPMax
 	private final Gauge mpGauge = new Gauge(Statistics.MP, Statistics.MP); // MP / MPMax
-	private Directions direction = Directions.DOWN; // regarde vers le bas par défaut
+	private Direction direction = Direction.DOWN; // regarde vers le bas par défaut
 	private final Gauge alignGauge = new Gauge(Statistics.ALIGNMENT, 100);
 	private boolean canSwordAttack, swordAttack, isBlocked, hasOverheadMessage, isWriting, isInEvent;
 	private GameMap currentGameMap;
 	private float critChanceRatio;
 
+	private final Rectangle hitbox;
 	private final Rectangle tempHitbox;
-	private final EnumMap<Directions, Rectangle> swordHitbox = new EnumMap<>(Directions.class);
-	private final EnumMap<Directions, Rectangle> swordHitboxScreen = new EnumMap<>(Directions.class);
+	private final EnumMap<Direction, Rectangle> swordHitbox = new EnumMap<>(Direction.class);
+	private final EnumMap<Direction, Rectangle> swordHitboxScreen = new EnumMap<>(Direction.class);
 	private int moveFrame = 7;
 
 	/** Méthodes static **/
 	private static int alignToTile(int value) { return value - (value % CELL_SIZE); }
 
-	private static void createSwordHitBox(EnumMap<Directions, Rectangle> shb, int x, int y) { // HIT BOX EPEE (REELLE / A L'ECRAN)
-		shb.put(Directions.DOWN,  new Rectangle(x, y + (CELL_SIZE / 2) + OFFSET_SWORD_PX, CELL_SIZE, CELL_SIZE / 2));
-		shb.put(Directions.LEFT,  new Rectangle(x - OFFSET_SWORD_PX, y, CELL_SIZE / 2, CELL_SIZE));
-		shb.put(Directions.RIGHT, new Rectangle(x + (CELL_SIZE / 2) + OFFSET_SWORD_PX, y, CELL_SIZE / 2, CELL_SIZE));
-		shb.put(Directions.UP,    new Rectangle(x, y - (CELL_SIZE / 2) + OFFSET_SWORD_PX, CELL_SIZE, CELL_SIZE / 2));
+	private static void createSwordHitBox(EnumMap<Direction, Rectangle> shb, int x, int y) { // HIT BOX EPEE (REELLE / A L'ECRAN)
+		shb.put(Direction.DOWN,  new Rectangle(x, y + (CELL_SIZE / 2) + OFFSET_SWORD_PX, CELL_SIZE, CELL_SIZE / 2));
+		shb.put(Direction.LEFT,  new Rectangle(x - OFFSET_SWORD_PX, y, CELL_SIZE / 2, CELL_SIZE));
+		shb.put(Direction.RIGHT, new Rectangle(x + (CELL_SIZE / 2) + OFFSET_SWORD_PX, y, CELL_SIZE / 2, CELL_SIZE));
+		shb.put(Direction.UP,    new Rectangle(x, y - (CELL_SIZE / 2) + OFFSET_SWORD_PX, CELL_SIZE, CELL_SIZE / 2));
 	}
 
 	/** Constructeur **/
@@ -83,7 +84,9 @@ public final class Hero implements Camera.CamLock {
 		if (goldCoins < 0) throw new IllegalArgumentException("Pieces d'or du heros " + name + " < 0");
 		if (xCell < 0 || xCell >= gameMap.getWidth()) throw new IllegalArgumentException("Case x du héros " + name + " < 0 ou >= " + gameMap.getWidth());
 		if (yCell < 0 || yCell >= gameMap.getHeight()) throw new IllegalArgumentException("Case y du héros " + name + " < 0 ou >= " + gameMap.getHeight());
-		if (critChancePercent < 0 || critChancePercent > 100) throw new IllegalArgumentException("Pourcentage de chance de coups critiques du héros " + name + " < 0 ou > 100");
+		if (!Float.isFinite(critChancePercent) || critChancePercent < 0 || critChancePercent > 100) {
+			throw new IllegalArgumentException("Pourcentage de chance de critique invalide du héros + " + name + " invalide : " + critChancePercent);
+		}
 
 		this.level = level;
 		this.goldCoins = goldCoins;
@@ -91,63 +94,63 @@ public final class Hero implements Camera.CamLock {
 		screenPosition = new Position(alignToTile(WINDOW_WIDTH / 2), alignToTile(WINDOW_HEIGHT / 2));
 		this.critChanceRatio = critChancePercent / 100f; // divise par 100 (pour obtenir un ratio)
 
-		tempHitbox = new Rectangle(getX(), getY(), CELL_SIZE, CELL_SIZE);
+		hitbox = new Rectangle(getX(), getY(), CELL_SIZE, CELL_SIZE);
+		tempHitbox = new Rectangle(hitbox);
 		createSwordHitBox(swordHitbox, getX(), getY());
 		createSwordHitBox(swordHitboxScreen, getXScreen(), getYScreen());
 		updateOffset();
 	}
 
 	/** Getters **/
-	public String getName() { return name; }
-	public Skin getSkin() { return skin; }
-	public HeroClass getHeroClass() { return classe; }
-	public int getLevel() { return level; }
-	public int getGoldCoins() { return goldCoins; }
-	public int getXOffset() { return xOffset; }
-	public int getYOffset() { return yOffset; }
-	public int getX() { return position.getX(); }
-	public int getY() { return position.getY(); }
-	public int getXCell() { return position.getXCell(); }
-	public int getYCell() { return position.getYCell(); }
-	public String getPositionString() { return position.toString(); }
-	public String getPositionCellsString() { return position.toStringCells(); }
-	public Position getScreenPosition() { return screenPosition; }
-	public int getXScreen() { return screenPosition.getX(); }
-	public int getYScreen() { return screenPosition.getY(); }
-	@Override public int getXCam() { return getXOffset(); }
-	@Override public int getYCam() { return getYOffset(); }
-	public int getForce() { return force; }
-	public int getDexterity() { return dexterity; }
-	public int getConstitution() { return constitution; }
-	public int getHp() { return hpGauge.getValue(); }
-	public int getHpMax() { return hpGauge.getMax(); }
-	public double getHpRatio() { return hpGauge.getRatio(); }
-	public int getMp() { return mpGauge.getValue(); }
-	public int getMpMax() { return mpGauge.getMax(); }
-	public double getMpRatio() { return mpGauge.getRatio(); }
-	public Directions getDirection() { return direction; }
-	public int getAlignment() { return alignGauge.getValue(); }
-	public boolean canSwordAttack() { return canSwordAttack; }
-	public boolean swordAttack() { return swordAttack; }
-	public boolean isBlocked() { return isBlocked; }
-	public boolean hasOverheadMessage() { return hasOverheadMessage; }
-	public boolean isWriting() { return isWriting; }
-	public boolean isInEvent() { return isInEvent; }
-	public GameMap getCurrentGameMap() { return currentGameMap; }
-	public float getCritChanceRatio() { return critChanceRatio; }
-	public Rectangle getHitbox() { return position.getRectHitbox(CELL_SIZE); }
-	public Rectangle getSwordHitbox() { return swordHitbox.get(direction); }
+	public String getName()                 { return name; }
+	public Skin getSkin()                   { return skin; }
+	public HeroClass getHeroClass()         { return classe; }
+	public int getLevel()                   { return level; }
+	public int getGoldCoins()               { return goldCoins; }
+	public int getXOffset()                 { return xOffset; }
+	public int getYOffset()                 { return yOffset; }
+	public int getX()                       { return position.getX(); }
+	public int getY()                       { return position.getY(); }
+	public int getXCell()                   { return position.getXCell(); }
+	public int getYCell()                   { return position.getYCell(); }
+	public String getPositionString()       { return position.toString(); }
+	public String getPositionCellsString()  { return position.toStringCells(); }
+	public int getXScreen()                 { return screenPosition.getX(); }
+	public int getYScreen()                 { return screenPosition.getY(); }
+	@Override public int getXCam()          { return getXOffset(); }
+	@Override public int getYCam()          { return getYOffset(); }
+	public int getForce()                   { return force; }
+	public int getDexterity()               { return dexterity; }
+	public int getConstitution()            { return constitution; }
+	public int getHp()                      { return hpGauge.getValue(); }
+	public int getHpMax()                   { return hpGauge.getMax(); }
+	public double getHpRatio()              { return hpGauge.getRatio(); }
+	public int getMp()                      { return mpGauge.getValue(); }
+	public int getMpMax()                   { return mpGauge.getMax(); }
+	public double getMpRatio()              { return mpGauge.getRatio(); }
+	public Direction getDirection()         { return direction; }
+	public int getAlignment()               { return alignGauge.getValue(); }
+	public boolean canSwordAttack()         { return canSwordAttack; }
+	public boolean swordAttack()            { return swordAttack; }
+	public boolean isBlocked()              { return isBlocked; }
+	public boolean hasOverheadMessage()     { return hasOverheadMessage; }
+	public boolean isWriting()              { return isWriting; }
+	public boolean isInEvent()              { return isInEvent; }
+	public GameMap getCurrentGameMap()      { return currentGameMap; }
+	public float getCritChanceRatio()       { return critChanceRatio; }
+	public Rectangle getHitbox()            { return hitbox; }
+	public Rectangle getSwordHitbox()       { return swordHitbox.get(direction); }
 	public Rectangle getSwordHitboxScreen() { return swordHitboxScreen.get(direction); }
-	public int getMoveFrame() { return moveFrame; }
+	public int getMoveFrame()               { return moveFrame; }
 
 	/** Setters **/
-	public void setCanSwordAttack(boolean b) { canSwordAttack = b; }
-	public void setSwordAttack(boolean b) { swordAttack = b; }
-	public void setIsBlocked(boolean b) { isBlocked = b; }
-	public void setHasOverheadMessage(boolean b) { hasOverheadMessage = b; }
-	public void setIsWriting(boolean b) { isWriting = b; }
-	public void setIsInEvent(boolean b) { isInEvent = b; }
-	public void setCurrentGameMap(GameMap gameMap) { currentGameMap = Objects.requireNonNull(gameMap, "Carte actuelle null"); }
+	public void setCanSwordAttack(boolean b)       { canSwordAttack = b; }
+	public void setSwordAttack(boolean b)          { swordAttack = b; }
+	public void setIsBlocked(boolean b)            { isBlocked = b; }
+	public void setHasOverheadMessage(boolean b)   { hasOverheadMessage = b; }
+	void setIsWriting(boolean b)                   { isWriting = b; }
+	public void setIsInEvent(boolean b)            { isInEvent = b; }
+	public void setCurrentGameMap(GameMap gameMap) { currentGameMap = Objects.requireNonNull(gameMap, "Nouvelle carte actuelle null"); }
 	public void setMoveFrame(int mf) {
 		if (mf < 0 || mf >= 12) throw new IllegalArgumentException("Frame de déplacement hors bornes : " + mf);
 		moveFrame = mf;
@@ -157,11 +160,11 @@ public final class Hero implements Camera.CamLock {
 	private void incrementMoveFrame() { moveFrame = (moveFrame + 1) % 12; }
 
 	public void updateOffset() {
-		xOffset = screenPosition.getX() - position.getX();
-		yOffset = screenPosition.getY() - position.getY();
+		xOffset = getXScreen() - getX();
+		yOffset = getYScreen() - getY();
 	}
 
-	public void updatePosition(int x, int y) { position.set(x, y); updateOffset(); }
+	public void updatePosition(int x, int y) { position.set(x, y); hitbox.setLocation(x, y); updateOffset(); }
 	public void addAlignment(int value)      { alignGauge.add(value); }
 	public void addHp(int value)             { hpGauge.add(value); }
 	public void addMp(int value)             { mpGauge.add(value); }
@@ -169,7 +172,7 @@ public final class Hero implements Camera.CamLock {
 
 	public void updateSwordHitBox() {
 		final Rectangle rect = swordHitbox.get(direction);
-		final int x = position.getX(), y = position.getY();
+		final int x = getX(), y = getY();
 		switch (direction) {
 			case DOWN   -> rect.setLocation(x, y + (CELL_SIZE / 2) + OFFSET_SWORD_PX);
 			case LEFT   -> rect.setLocation(x - OFFSET_SWORD_PX, y);
@@ -178,9 +181,9 @@ public final class Hero implements Camera.CamLock {
 		}
 	}
 
-	public boolean move(Directions d) {
+	public boolean move(Direction d) {
 		Objects.requireNonNull(d, "Direction null");
-		tempHitbox.setLocation(position.getX(), position.getY());
+		tempHitbox.setLocation(getX(), getY());
 		switch (d) {
 			case DOWN  -> tempHitbox.y += HERO_MOVE_STEP;
 			case LEFT  -> tempHitbox.x -= HERO_MOVE_STEP;

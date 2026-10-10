@@ -4,7 +4,7 @@
 ---
 🇫🇷 Version Française
 
-# Java/AWT Action RPG Starter Kit v1.2
+# Java/AWT Action RPG Starter Kit v1.3
 Projet de création d'un moteur de jeu 2D Action-RPG inspiré du MMORPG français *Slayers Online*  
 (version offline pour le moment, il n'est pas en ligne).
 
@@ -36,7 +36,8 @@ Puis exécuter :
 
 ## POUR LANCER LE JEU
 
-Depuis la racine du projet, exécuter la commande avec le terminal ```java -cp "bin;libs/*" core.Main```
+Depuis la racine du projet, exécuter la commande avec le terminal ```java -cp "bin;libs/*" core.Main```  
+ou plus facilement en lancant le projet depuis IntelliJ (en cliquant sur "run" depuis la classe Main)  
 
 ## 📜 LICENCE
 
@@ -58,7 +59,7 @@ Les ressources graphiques, musicales et sonores appartiennent à leurs auteurs r
 ---
 🇬🇧 English Version
 
-# Java/AWT Action RPG Starter Kit v1.2
+# Java/AWT Action RPG Starter Kit v1.3
 
 Project for creating a 2D Action-RPG game engine inspired by the French MMORPG *Slayers Online*  
 (offline version for now, it is not online yet).
@@ -91,7 +92,8 @@ Then run :
 
 ## HOW TO LAUNCH THE GAME
 
-From the project root folder, run the command with the terminal ```java -cp "bin;libs/*" core.Main``` file.
+From the project root folder, run the command with the terminal ```java -cp "bin;libs/*" core.Main``` file.  
+or more easily by launching the project from IntelliJ (by clicking "Run" in the Main class)  
 
 ## 📜 LICENSE
 

@@ -28,8 +28,8 @@ public final class Gauge {
 	}
 
 	/** Getters **/
-	public int getValue() { return value; }
-	public int getMax() { return max; }
+	public int getValue()    { return value; }
+	public int getMax()      { return max; }
 	public double getRatio() { return (double) value / max; }
 
 	/** Setters **/
@@ -41,7 +41,7 @@ public final class Gauge {
 	}
 
 	/** Autres méthodes **/
-	public boolean isFull() { return value == max; }
+	public boolean isFull()  { return value == max; }
 	public boolean isEmpty() { return value == 0; }
 	public void add(int delta) { // Évite l'overflow potentiel lors de l'addition valeur + delta.
 		long result = (long) value + delta;

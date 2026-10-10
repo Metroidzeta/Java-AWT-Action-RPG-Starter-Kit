@@ -12,6 +12,7 @@
  */
 package core;
 
+import core.resources.Music;
 import core.resources.SoundEffect;
 
 import java.util.Map;
@@ -22,26 +23,33 @@ public final class GameContext {
     private final Hero hero;
     private final AudioManager audioManager;
     private final Camera camera = new Camera();
+    private final Controls controls;
 
     private final StringBuilder message = new StringBuilder();
     private final StringBuilder lastMessage = new StringBuilder();
-    private final Object messageLock = new Object();
     private int nbEventPass = 0;
 
     /** Constructeur **/
-    public GameContext(Hero hero, Map<String, SoundEffect> soundEffects) {
+    public GameContext(Hero hero, Map<String, SoundEffect> soundEffects, Map<String, Music> musics, Controls controls) {
         this.hero = Objects.requireNonNull(hero, "hero null");
-        this.audioManager = new AudioManager(soundEffects);
+        this.audioManager = new AudioManager(soundEffects, musics);
+        this.controls = Objects.requireNonNull(controls, "Controls null");
     }
 
     /** Getters **/
-    public Hero getHero() { return hero; }
+    public Hero getHero()                 { return hero; }
     public AudioManager getAudioManager() { return audioManager; }
-    public Camera getCamera() { return camera; }
-    public int getNbEventPass() { return nbEventPass; }
-    public StringBuilder getMessage() { return message; }
-    public StringBuilder getLastMessage() { return lastMessage; }
-    public Object getMessageLock() { return messageLock; }
+    public Camera getCamera()             { return camera; }
+    public int getNbEventPass()           { return nbEventPass; }
+    public boolean messageIsEmpty()       { return message.isEmpty(); }
+    public String getMessageText()        { return message.toString(); }
+    public String getLastMessageText()    { return lastMessage.toString(); }
+
+    /** Setters **/
+    public void setWritingMode(boolean enabled) {
+        hero.setIsWriting(enabled);
+        controls.setTextInputEnabled(enabled);
+    }
 
     /** Autres méthodes **/
     public void incrementNbEventPass() { nbEventPass++; }
@@ -53,29 +61,36 @@ public final class GameContext {
         camera.sync(); // synchroniser la caméra pour empêcher un glissement
     }
 
+    public void appendMessage(String text) {
+        Objects.requireNonNull(text, "Text null");
+
+        final int remaining = Config.MSG_SIZE_MAX - message.length();
+        if (remaining <= 0 || text.isEmpty()) return;
+
+        final int length = Math.min(text.length(), remaining);
+        message.append(text, 0, length);
+    }
+
     public void clearMessage() {
-        synchronized(messageLock) {
-            message.setLength(0);
-        }
+         message.setLength(0);
     }
 
     public void saveMessage() {
-        synchronized(messageLock) {
-            lastMessage.setLength(0);
-            lastMessage.append(message);
-        }
+        lastMessage.setLength(0);
+        lastMessage.append(message);
     }
 
     public void restoreLastMessage() {
-        synchronized(messageLock) {
-            message.setLength(0);
-            message.append(lastMessage);
-        }
+        message.setLength(0);
+        message.append(lastMessage);
     }
 
     public void deleteLastCharacterMessage() {
-        synchronized(messageLock) {
-            if (!message.isEmpty()) message.deleteCharAt(message.length() - 1);
-        }
+        if (message.isEmpty()) return;
+
+        final int codePoint = message.codePointBefore(message.length());
+        final int charCount = Character.charCount(codePoint);
+
+        message.delete(message.length() - charCount, message.length());
     }
 }

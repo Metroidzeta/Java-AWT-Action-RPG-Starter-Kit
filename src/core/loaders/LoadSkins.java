@@ -29,7 +29,7 @@ public final class LoadSkins {
 	);
 
 	/** Getters **/
-	public static Map<String, Skin> get() {
+	public static Map<String, Skin> load() {
 		final Map<String, Skin> skins = new HashMap<>(SKINS_LIST.size());
 		SKINS_LIST.forEach(skin -> skins.put(skin.getName(), skin));
 		return Map.copyOf(skins);

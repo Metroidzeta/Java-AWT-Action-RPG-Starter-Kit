@@ -19,9 +19,9 @@ package core;
  */
 public final class Camera {
 
-	public interface CamLock { int getXCam(); int getYCam(); }
+	public interface CameraTarget { int getXCam(); int getYCam(); }
 
-	private CamLock target; // cible actuellement suivie
+	private CameraTarget target; // cible actuellement suivie
 	private double xPrev, yPrev;
 	private double xInter, yInter;
 	private int xCurr, yCurr;
@@ -31,7 +31,7 @@ public final class Camera {
 	public double getY() { return yInter; }
 
 	/** Définit la cible suivie par la caméra **/
-	public void setTarget(CamLock target) {
+	public void setTarget(CameraTarget target) {
 		this.target = target;
 		if (target != null) {
 			xCurr = target.getXCam();
@@ -66,6 +66,6 @@ public final class Camera {
 	@Override
 	public String toString() {
 		return "Camera[Prev: (x: %.2f, y: %.2f), Inter: (x: %.2f, y: %.2f), Curr: (x: %d, y: %d)]"
-				.formatted(xPrev, yPrev, xInter, yInter, xCurr, yCurr);
+					.formatted(xPrev, yPrev, xInter, yInter, xCurr, yCurr);
 	}
 }

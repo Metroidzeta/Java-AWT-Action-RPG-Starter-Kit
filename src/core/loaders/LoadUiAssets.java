@@ -36,7 +36,7 @@ public final class LoadUiAssets {
 	);
 
 	/** Getters **/
-	public static Map<String, BufferedImage> get() {
+	public static Map<String, BufferedImage> load() {
 		final Map<String, BufferedImage> uiAssets = new HashMap<>(UI_ASSETS_LIST.size());
 		UI_ASSETS_LIST.forEach(data -> {
 			BufferedImage image = Util.loadImage(UI_ASSETS_DIRECTORY + "/" + data.fileName());

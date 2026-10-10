@@ -33,7 +33,7 @@ public final class Event_MSG implements Event {
 	@Override
 	public void execute(GameContext gc) {
 		Objects.requireNonNull(gc, "GameContext null");
-		gc.getHero().setIsWriting(false);
+		gc.setWritingMode(false);
 	}
 
 	@Override

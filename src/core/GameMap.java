@@ -19,9 +19,10 @@ import static core.Config.CELL_SIZE;
 
 import java.awt.Rectangle;
 import java.util.Arrays;
-import java.util.Objects;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Objects;
 
 /**
  * Représente une carte (niveau du jeu) composée de plusieurs couches de tuiles,
@@ -29,7 +30,18 @@ import java.util.HashMap;
  */
 public final class GameMap {
 	private record CellCoord(int xCell, int yCell) {}
-	private record CellBounds(int x0, int x1, int y0, int y1) {}
+	public static final class CellBounds {
+		private int x0, x1, y0, y1;
+
+		public void set(int x0, int x1, int y0, int y1) {
+			this.x0 = x0; this.x1 = x1; this.y0 = y0; this.y1 = y1;
+		}
+
+		public int x0() { return x0; }
+		public int x1() { return x1; }
+		public int y0() { return y0; }
+		public int y1() { return y1; }
+	}
 
 	public static final int MATRIX_SIZE_MAX = 100; // n*n, par défaut : 100
 	private static final int LAYERS_COUNT = 3; // par défaut : 3
@@ -41,7 +53,8 @@ public final class GameMap {
 	private final Music music;
 	private final int[][][] layers; // 3 couches (matrices) de numTileChipset (C0 < C1 < Héros < C2)
 	private final boolean[][] walls; // Matrice booléenne représentant les murs sur chaque case (false = pas de mur, true = mur)
-	private final Map<CellCoord, EventGroup> events = new HashMap<>(); // Events par cases
+	private final Map<CellCoord, EventGroup> eventsGroups = new HashMap<>(); // Events par cases
+	private final ArrayList<Enemy> enemies = new ArrayList<>();
 
 	/** Méthodes static **/
 	private static boolean hasDimensions(int[][] matrix, int width, int height) {
@@ -137,20 +150,23 @@ public final class GameMap {
 	private CellBounds getCellBounds(Rectangle rect) {
 		Objects.requireNonNull(rect, "Rectangle null");
 
-		final int x0 = Math.max(0, rect.x / CELL_SIZE);
-		final int x1 = Math.min(width, (rect.x + rect.width - 1) / CELL_SIZE + 1);
-		final int y0 = Math.max(0, rect.y / CELL_SIZE);
-		final int y1 = Math.min(height, (rect.y + rect.height - 1) / CELL_SIZE + 1);
+		CellBounds cellBounds = new CellBounds();
+		cellBounds.set(
+				Math.max(0, rect.x / CELL_SIZE),
+				Math.min(width, (rect.x + rect.width - 1) / CELL_SIZE + 1),
+				Math.max(0, rect.y / CELL_SIZE),
+				Math.min(height, (rect.y + rect.height - 1) / CELL_SIZE + 1)
+		);
 
-		return new CellBounds(x0, x1, y0, y1);
+		return cellBounds;
 	}
 
 	/** Getters **/
-	public String getName() { return name; }
-	public int getWidth() { return width; }
-	public int getHeight() { return height; }
+	public String getName()     { return name; }
+	public int getWidth()       { return width; }
+	public int getHeight()      { return height; }
 	public Chipset getChipset() { return chipset; }
-	public Music getMusic() { return music; }
+	public Music getMusic()     { return music; }
 	public int getNumTile(int layerIndex, int i, int j) {
 		if (layerIndex < 0 || layerIndex >= LAYERS_COUNT) throw new IndexOutOfBoundsException("LayerIndex < 0 ou >= " + LAYERS_COUNT);
 		if (isInvalidMatrixIndex(i, j)) throw new IndexOutOfBoundsException("i < 0 ou i >= " + height + " ou j < 0 ou j >= " + width);
@@ -160,12 +176,13 @@ public final class GameMap {
 		if (isInvalidMatrixIndex(i, j)) throw new IndexOutOfBoundsException("i < 0 ou i >= " + height + " ou j < 0 ou j >= " + width);
 		return walls[i][j];
 	}
+	public ArrayList<Enemy> getEnemies() { return enemies; }
 
 	/** Autres méthodes **/
 	// --- Collisions murs ---
 	public boolean hasWallCollision(Rectangle rect) {
 		final CellBounds b = getCellBounds(rect);
-		if (DEBUG_MODE) System.out.printf("x0: %d, x1: %d, y0: %d, y1: %d%n", b.x0(), b.x1(), b.y0(), b.y1());
+		if (DEBUG_MODE) System.out.printf("CellBounds xCells: %d-%d, yCells: %d-%d%n", b.x0(), b.x1(), b.y0(), b.y1());
 
 		for (int y = b.y0(); y < b.y1(); y++) {
 			for (int x = b.x0(); x < b.x1(); x++) {
@@ -181,7 +198,7 @@ public final class GameMap {
 
 		for (int y = b.y0(); y < b.y1(); y++) {
 			for (int x = b.x0(); x < b.x1(); x++) {
-				final EventGroup group = events.get(new CellCoord(x, y));
+				final EventGroup group = eventsGroups.get(new CellCoord(x, y));
 				if (group != null && rect.intersects(GLOBAL_RECT_MATRIX[y][x])) return group;
 			}
 		}
@@ -197,7 +214,16 @@ public final class GameMap {
 			throw new IllegalArgumentException("Carte[%s]: coordonnées d'événement hors limites [xCell:%d, yCell:%d]".formatted(name, xCell, yCell));
 		}
 		Objects.requireNonNull(ev, "Event null ajouté à la carte " + name);
-		events.computeIfAbsent(new CellCoord(xCell, yCell), coord -> new EventGroup()).add(numPage, ev);
+		eventsGroups.computeIfAbsent(new CellCoord(xCell, yCell), coord -> new EventGroup()).add(numPage, ev);
+	}
+
+	public void addEnemy(Enemy enemy) {
+		Objects.requireNonNull(enemy, "Enemy null ajouté à la carte " + name);
+		final int xCell = enemy.getXCell(), yCell = enemy.getYCell();
+		if (isInvalidMatrixIndex(yCell, xCell)) {
+			throw new IllegalArgumentException("Carte[%s]: coordonnées de l'ennemi hors limites [xCell:%d, yCell:%d]".formatted(name, xCell, yCell));
+		}
+		enemies.add(enemy);
 	}
 
 	@Override

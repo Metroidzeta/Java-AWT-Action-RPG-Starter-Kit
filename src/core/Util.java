@@ -59,7 +59,7 @@ public final class Util {
 
 	public static BufferedImage loadImage(String chemin) {
 		Path path = Path.of(chemin);
-		if (!Files.exists(path)) { System.err.println("Fichier introuvable : " + chemin); return null; }
+		if (!Files.isRegularFile(path)) throw new IllegalStateException("Fichier image introuvable : " + path.toAbsolutePath());
 		try {
 			BufferedImage img = ImageIO.read(path.toFile());
 			if (img == null) throw new IOException("Format non supporté ou image corrompue : " + chemin);
