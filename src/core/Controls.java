@@ -52,21 +52,21 @@ public final class Controls implements KeyListener {
 
 	// Mapping KeyCode -> Touche
 	private static final Map<Integer, GameKey> KEY_MAP = Map.ofEntries(
-			Map.entry(KeyEvent.VK_UP, GameKey.UP),
-			Map.entry(KeyEvent.VK_DOWN, GameKey.DOWN),
-			Map.entry(KeyEvent.VK_LEFT, GameKey.LEFT),
-			Map.entry(KeyEvent.VK_RIGHT, GameKey.RIGHT),
-			Map.entry(KeyEvent.VK_A, GameKey.A),
-			Map.entry(KeyEvent.VK_B, GameKey.B),
-			Map.entry(KeyEvent.VK_Q, GameKey.Q),
-			Map.entry(KeyEvent.VK_S, GameKey.S),
-			Map.entry(KeyEvent.VK_SPACE, GameKey.SPACE),
-			Map.entry(KeyEvent.VK_ENTER, GameKey.ENTER),
-			Map.entry(KeyEvent.VK_ESCAPE, GameKey.ESCAPE),
-			Map.entry(KeyEvent.VK_BACK_SPACE, GameKey.BACK_SPACE),
-			Map.entry(KeyEvent.VK_F1, GameKey.F1),
-			Map.entry(KeyEvent.VK_F3, GameKey.F3),
-			Map.entry(KeyEvent.VK_F5, GameKey.F5)
+		Map.entry(KeyEvent.VK_UP, GameKey.UP),
+		Map.entry(KeyEvent.VK_DOWN, GameKey.DOWN),
+		Map.entry(KeyEvent.VK_LEFT, GameKey.LEFT),
+		Map.entry(KeyEvent.VK_RIGHT, GameKey.RIGHT),
+		Map.entry(KeyEvent.VK_A, GameKey.A),
+		Map.entry(KeyEvent.VK_B, GameKey.B),
+		Map.entry(KeyEvent.VK_Q, GameKey.Q),
+		Map.entry(KeyEvent.VK_S, GameKey.S),
+		Map.entry(KeyEvent.VK_SPACE, GameKey.SPACE),
+		Map.entry(KeyEvent.VK_ENTER, GameKey.ENTER),
+		Map.entry(KeyEvent.VK_ESCAPE, GameKey.ESCAPE),
+		Map.entry(KeyEvent.VK_BACK_SPACE, GameKey.BACK_SPACE),
+		Map.entry(KeyEvent.VK_F1, GameKey.F1),
+		Map.entry(KeyEvent.VK_F3, GameKey.F3),
+		Map.entry(KeyEvent.VK_F5, GameKey.F5)
 	);
 
 	public Controls() {}

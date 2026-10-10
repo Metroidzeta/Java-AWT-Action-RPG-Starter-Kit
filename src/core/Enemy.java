@@ -45,14 +45,13 @@ public final class Enemy {
     }
 
     /** Getters **/
-    public int getX() { return position.getX(); }
-    public int getY() { return position.getY(); }
-    public int getXCell() { return position.getXCell(); }
-    public int getYCell() { return position.getYCell(); }
+    public int getX()            { return position.getX(); }
+    public int getY()            { return position.getY(); }
+    public int getXCell()        { return position.getXCell(); }
+    public int getYCell()        { return position.getYCell(); }
     public Rectangle getHitbox() { return hitbox; }
-
-    public Gauge getHpGauge() { return hpGauge; }
-    public EnemyData getData() { return data; }
+    public Gauge getHpGauge()    { return hpGauge; }
+    public EnemyData getData()   { return data; }
 
     /** Affichage de l'ennemi **/
     public void draw(Graphics g, int numRegion, Rectangle dstRect) {

@@ -138,7 +138,7 @@ public final class HudRenderer {
 		final int xText = boxStatsMenu.x + WW_1PERCENT;
 		final int yText = boxStatsMenu.y + WH_1PERCENT;
 
-		List<String> lines = List.of(
+		List<String> rows = List.of(
 				"Nom : "    + hero.getName(),
 				"Classe : " + hero.getHeroClass(),
 				"Niveau : " + hero.getLevel(),
@@ -151,9 +151,9 @@ public final class HudRenderer {
 				String.format("Taux Coups Critiques : %.1f %%", hero.getCritChanceRatio() * 100.0f)
 		);
 
-		for (int i = 0; i < lines.size(); i++) {
-			if (!lines.get(i).isEmpty()) {
-				ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), lines.get(i), xText, yText + i * WH_5PERCENT);
+		for (int i = 0; i < rows.size(); i++) {
+			if (!rows.get(i).isEmpty()) {
+				ctx.drawText(g, Color.WHITE, ctx.getDefaultFont(), rows.get(i), xText, yText + i * WH_5PERCENT);
 			}
 		}
 	}
